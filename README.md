@@ -116,3 +116,4 @@ models/ggml-model.bin                        — whisper model (not bundled in D
 
 ![homepage.png](public/examples/homepage.png)
 ![img.png](public/examples/player.png)
+![dm.png](public/examples/dm.png)
