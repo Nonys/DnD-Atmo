@@ -4,81 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DnD Atmosphere Generator</title>
+  <link rel="stylesheet" href="/theme.css">
 <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root { --panel: min(720px, calc(100vw - 32px)); }
 
-    body {
-      background: #0d0d0f;
-      color: #c9b99a;
-      font-family: 'Georgia', serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 24px 16px;
-    }
+    h1 a { margin-bottom: 6px; }
+    body { padding-bottom: 36px; }
 
-    h1 a {
-      font-size: 1.4rem;
-      letter-spacing: 0.15em;
-      color: #e8d5a3;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-      opacity: 0.85;
-      text-decoration: none;
-      display: block;
-    }
-    h1 a:hover { opacity: 1; }
+    #image-frame { width: min(calc(100vw - 32px), 500px); }
 
-    #qr-link {
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
-      color: #5a5040;
-      text-decoration: none;
-      margin-bottom: 12px;
-      display: none;
-    }
-    #qr-link:hover { color: #9a8a6a; }
-
-    /* ---- Main image display ---- */
-    #image-frame {
-      position: relative;
-      width: min(calc(100vw - 32px), 1000px);
-      aspect-ratio: 1;
-      background: #1a1710;
-      border: 1px solid #3a3020;
-      margin-bottom: 16px;
-      overflow: hidden;
-      transition: aspect-ratio 0.4s ease;
-    }
-
-    #current-image, #prev-image {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    #current-image { opacity: 0; transition: opacity 0.5s ease; z-index: 2; }
-    #current-image.slow { transition: opacity 1.2s ease; }
-    #current-image.visible { opacity: 1; cursor: zoom-in; }
-    #prev-image { opacity: 0; z-index: 1; transition: opacity 0.5s ease; }
-    #prev-image.slow { transition: opacity 1.2s ease; }
-
-    #placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #4a3f2a;
-      font-size: 0.9rem;
-      letter-spacing: 0.1em;
-      z-index: 0;
-    }
+    /* ---- Prompt display (dm overrides) ---- */
+    #prompt-display { width: var(--panel); margin-top: 10px; margin-bottom: 0; }
+    #prompt-text { height: 180px; resize: vertical; }
 
     /* ---- Readiness indicators ---- */
     #readiness {
@@ -162,6 +99,7 @@
       border: 1px solid #3a3020;
       margin-bottom: 12px;
       overflow: hidden;
+      width: var(--panel);
     }
     .mode-btn {
       flex: 1;
@@ -176,15 +114,19 @@
     .mode-btn:hover:not(.active) { background: #191510; color: #9a8a6a; border-color: transparent; }
     .mode-btn.active { background: #1f1a10; color: #e8d5a3; }
 
-    /* ---- Text mode controls ---- */
-    #text-controls {
+    /* ---- Scene input (text mode) ---- */
+    #scene-controls {
       display: none;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
       width: var(--panel);
-
+      margin-bottom: 12px;
+    }
+    #scene-controls label {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a6a4a;
+      margin-bottom: 6px;
     }
     #scene-input {
       width: 100%;
@@ -203,7 +145,7 @@
 
     /* ---- Upload mode controls ---- */
     #upload-controls {
-      display: none;
+      display: flex;
       flex-direction: column;
       align-items: center;
       gap: 10px;
@@ -245,17 +187,20 @@
     }
     #upload-desc:focus { outline: none; border-color: #6a5a3a; }
     #upload-desc::placeholder { color: #3a3020; }
-    #upload-hidden-label {
+    .upload-hidden-label {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
       font-size: 0.8rem;
       color: #7a6a4a;
       letter-spacing: 0.06em;
       cursor: pointer;
       user-select: none;
+      width: var(--panel);
+      margin-bottom: 10px;
     }
-    #upload-hidden-label input[type="checkbox"] {
+    .upload-hidden-label input[type="checkbox"] {
       width: 14px;
       height: 14px;
       accent-color: #7a6a4a;
@@ -366,13 +311,30 @@
     }
     #base-prompt:focus { outline: none; border-color: #6a5a3a; }
 
-    /* ---- Size toggle ---- */
+    /* ---- Text mode submit ---- */
+    #text-controls {
+      display: none;
+      width: var(--panel);
+      margin-bottom: 16px;
+      align-items: center;
+    }
+
+    /* ---- Size section ---- */
+    #size-section {
+      width: var(--panel);
+      margin-bottom: 16px;
+    }
+    #size-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 6px;
+    }
     #size-toggle {
       display: flex;
       border: 1px solid #3a3020;
-      width: var(--panel);
       overflow: hidden;
-      margin-bottom: 16px;
     }
     .size-btn {
       flex: 1;
@@ -388,48 +350,77 @@
     .size-btn:hover:not(.active) { background: #191510; color: #9a8a6a; border-color: transparent; }
     .size-btn.active { background: #1f1a10; color: #e8d5a3; }
 
-    /* ---- Cost display ---- */
+    /* ---- Cost footer ---- */
     #cost-bar {
-      width: var(--panel);
-
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       display: flex;
       gap: 24px;
       justify-content: center;
-      font-size: 0.8rem;
-      color: #6a6050;
-      margin-bottom: 16px;
+      padding: 6px 16px;
+      background: #0a0a0c;
+      border-top: 1px solid #2a2018;
+      font-size: 0.75rem;
+      color: #5a5040;
     }
     #cost-bar span { letter-spacing: 0.05em; }
     #cost-bar b { color: #9a8a5a; }
 
-    /* ---- Gallery ---- */
-    #gallery-label {
-      width: var(--panel);
+    body { padding-bottom: 36px; }
 
-      font-size: 0.7rem;
+    /* ---- Tabs ---- */
+    #tab-bar {
+      display: flex;
+      border: 1px solid #3a3020;
+      width: var(--panel);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 7px 24px;
+      font-size: 0.78rem;
+      border: none;
+      border-radius: 0;
+      background: #111008;
+      color: #4a3f2a;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #5a5040;
-      margin-bottom: 8px;
     }
+    .tab-btn:hover:not(.active) { background: #191510; color: #9a8a6a; }
+    .tab-btn.active { background: #1f1a10; color: #e8d5a3; }
 
-    #gallery {
+    #tab-generate, #tab-upload, #tab-gallery { display: none; flex-direction: column; align-items: center; width: 100%; }
+    #tab-generate.active, #tab-upload.active, #tab-gallery.active { display: flex; }
+
+    /* ---- Gallery carousel ---- */
+    #gallery-carousel {
       width: var(--panel);
-
       display: flex;
       gap: 8px;
-      flex-wrap: wrap;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 16px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: thin;
+      scrollbar-color: #3a3020 #0d0d0f;
     }
+    #gallery-carousel::-webkit-scrollbar { height: 4px; }
+    #gallery-carousel::-webkit-scrollbar-track { background: #0d0d0f; }
+    #gallery-carousel::-webkit-scrollbar-thumb { background: #3a3020; }
 
     .thumb-wrap {
       position: relative;
-      width: 72px;
-      height: 72px;
       flex-shrink: 0;
+      width: 100px;
+      height: 100px;
+      scroll-snap-align: start;
     }
     .thumb {
-      width: 72px;
-      height: 72px;
+      width: 100px;
+      height: 100px;
       object-fit: cover;
       border: 1px solid #2a2518;
       cursor: pointer;
@@ -438,11 +429,12 @@
     }
     .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
     .thumb:active { transform: scale(0.88); }
+
     .btn-del {
       display: none;
       position: absolute;
       top: 3px; right: 3px;
-      width: 18px; height: 18px;
+      width: 20px; height: 20px;
       padding: 0;
       background: rgba(15,5,5,0.88);
       border: 1px solid #7a3a3a;
@@ -460,7 +452,7 @@
       display: none;
       position: absolute;
       top: 3px; left: 3px;
-      width: 18px; height: 18px;
+      width: 20px; height: 20px;
       padding: 0;
       background: rgba(15,5,5,0.88);
       border: 1px solid #4a4030;
@@ -478,45 +470,52 @@
     .thumb-wrap.hidden .thumb:hover,
     .thumb-wrap.hidden .thumb.active { opacity: 0.55; }
 
-    /* ---- Prompt display ---- */
-    #prompt-display {
-      display: none;
+    /* ---- Gallery frame (big preview) ---- */
+    #gallery-frame {
       width: var(--panel);
+      position: relative;
+      aspect-ratio: 1;
+      background: #1a1710;
+      border: 1px solid #3a3020;
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: aspect-ratio 0.4s ease;
+    }
+    #gallery-current-image, #gallery-prev-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #gallery-current-image { opacity: 0; transition: opacity 0.5s ease; z-index: 2; }
+    #gallery-current-image.visible { opacity: 1; cursor: zoom-in; }
+    #gallery-prev-image { opacity: 0; z-index: 1; transition: opacity 0.5s ease; }
+    #gallery-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #4a3f2a;
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      z-index: 0;
+    }
 
-      margin-top: 10px;
-    }
-    #prompt-display label {
-      display: block;
-      font-size: 0.7rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #5a5040;
-      margin-bottom: 5px;
-    }
-    #prompt-text {
-      background: #0f0e0a;
-      border: 1px solid #2a2518;
-      color: #7a6a4a;
-      font-size: 0.8rem;
-      padding: 8px 10px;
-      line-height: 1.5;
-      height: 180px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      resize: vertical;
-    }
   </style>
 </head>
 <body>
 
 <h1><a href="/">DnD Atmosphere</a></h1>
-<a id="qr-link" href="/" target="_blank">&#9654; Share &amp; QR codes</a>
 
-<div id="image-frame">
-  <div id="placeholder">Awaiting vision...</div>
-  <img id="prev-image" src="" alt="">
-  <img id="current-image" src="" alt="">
+<div id="tab-bar">
+  <button class="tab-btn active" id="btn-tab-generate">&#9881; Generate</button>
+  <button class="tab-btn"        id="btn-tab-upload">&#8679; Upload</button>
+  <button class="tab-btn"        id="btn-tab-gallery">&#9783; Gallery</button>
 </div>
+
+<div id="tab-generate" class="active">
 
 <div id="readiness">
   <span id="ind-mic"   class="indicator checking"><span class="dot"></span>Microphone</span>
@@ -528,14 +527,30 @@
 <div id="mode-toggle">
   <button class="mode-btn active" id="btn-mode-voice">&#9679; Voice</button>
   <button class="mode-btn"        id="btn-mode-text">&#10002; Type</button>
-  <button class="mode-btn"        id="btn-mode-upload">&#8679; Upload</button>
 </div>
 
-<div id="step-progress">
-  <span id="step-transcribe" class="step"><span class="dot"></span>Transcribing</span>
-  <span class="step-sep">→</span>
-  <span id="step-generate" class="step"><span class="dot"></span>Generating image</span>
+<div id="prompt-area">
+  <label>Base Style Prompt</label>
+  <textarea id="base-prompt" spellcheck="false">fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting, dark fantasy</textarea>
 </div>
+
+<div id="scene-controls">
+  <label>Scene Description</label>
+  <textarea id="scene-input" placeholder="Describe the scene..."></textarea>
+</div>
+
+<div id="size-section">
+  <div id="size-label">Image Size</div>
+  <div id="size-toggle">
+    <button class="size-btn active" data-size="1024x1024">Square 1:1</button>
+    <button class="size-btn"        data-size="1792x1024">Landscape 16:9</button>
+    <button class="size-btn"        data-size="1024x1792">Portrait 9:16</button>
+  </div>
+</div>
+
+<label id="upload-hidden-gen-label" class="upload-hidden-label">
+  <input type="checkbox" id="upload-hidden-gen"> Hide from players
+</label>
 
 <div id="controls">
   <button id="btn-start" disabled>&#9679; Start Listen</button>
@@ -545,9 +560,32 @@
 </div>
 
 <div id="text-controls">
-  <textarea id="scene-input" placeholder="Describe the scene..."></textarea>
   <button id="btn-text-submit" disabled>&#10024; Do The Magic</button>
 </div>
+
+<div id="step-progress">
+  <span id="step-transcribe" class="step"><span class="dot"></span>Transcribing</span>
+  <span class="step-sep">→</span>
+  <span id="step-generate" class="step"><span class="dot"></span>Generating image</span>
+</div>
+
+<div id="transcription-box">
+  <label>Heard</label>
+  <div id="transcription-text"></div>
+</div>
+
+<div id="status">Checking prerequisites...</div>
+<div id="timing"></div>
+
+<div id="image-frame">
+  <div id="placeholder">Awaiting vision...</div>
+  <img id="prev-image" src="" alt="">
+  <img id="current-image" src="" alt="">
+</div>
+
+</div><!-- #tab-generate -->
+
+<div id="tab-upload">
 
 <div id="upload-controls">
   <div id="upload-drop">
@@ -555,44 +593,36 @@
     <input type="file" id="upload-file" accept="image/*" multiple>
   </div>
   <textarea id="upload-desc" placeholder="Description (optional)"></textarea>
+  <label class="upload-hidden-label">
+    <input type="checkbox" id="upload-hidden"> Hide from players
+  </label>
   <button id="btn-upload-submit" disabled>&#8679; Add to Gallery</button>
 </div>
 
-<label id="upload-hidden-label">
-  <input type="checkbox" id="upload-hidden"> Hide from players
-</label>
+</div><!-- #tab-upload -->
 
-<div id="status">Checking prerequisites...</div>
-<div id="timing"></div>
+<div id="tab-gallery">
 
-<div id="transcription-box">
-  <label>Heard</label>
-  <div id="transcription-text"></div>
+<div id="gallery-carousel"></div>
+
+<div id="gallery-frame">
+  <div id="gallery-placeholder">Select an image...</div>
+  <img id="gallery-prev-image" src="" alt="">
+  <img id="gallery-current-image" src="" alt="">
 </div>
 
-<div id="prompt-area">
-  <label>Base Style Prompt</label>
-  <textarea id="base-prompt" spellcheck="false">fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting, dark fantasy</textarea>
-</div>
-
-<div id="size-toggle">
-  <button class="size-btn active" data-size="1024x1024">Square 1:1</button>
-  <button class="size-btn"        data-size="1792x1024">Landscape 16:9</button>
-  <button class="size-btn"        data-size="1024x1792">Portrait 9:16</button>
-</div>
-
-<div id="cost-bar">
-  <span>Image: <b id="cost-image">—</b></span>
-  <span>Session: <b id="cost-session">$0.000</b></span>
-  <span>Lifetime: <b id="cost-lifetime">$0.000</b></span>
-</div>
-
-<div id="gallery-label">Session Gallery</div>
-<div id="gallery"></div>
 <div id="prompt-display">
   <label>Prompt used</label>
   <div id="prompt-text"></div>
 </div>
+
+</div><!-- #tab-gallery -->
+
+<footer id="cost-bar">
+  <span>Image: <b id="cost-image">—</b></span>
+  <span>Session: <b id="cost-session">$0.000</b></span>
+  <span>Lifetime: <b id="cost-lifetime">$0.000</b></span>
+</footer>
 
 <script>
 // ============================================================
@@ -620,8 +650,12 @@ const statusEl     = document.getElementById('status');
 const currentImg   = document.getElementById('current-image');
 const prevImg      = document.getElementById('prev-image');
 const placeholder  = document.getElementById('placeholder');
-const gallery      = document.getElementById('gallery');
 const imageFrame   = document.getElementById('image-frame');
+const galleryCarousel     = document.getElementById('gallery-carousel');
+const galleryFrame        = document.getElementById('gallery-frame');
+const galleryCurrentImg   = document.getElementById('gallery-current-image');
+const galleryPrevImg      = document.getElementById('gallery-prev-image');
+const galleryPlaceholder  = document.getElementById('gallery-placeholder');
 const basePromptEl = document.getElementById('base-prompt');
 const costImage    = document.getElementById('cost-image');
 const costSession  = document.getElementById('cost-session');
@@ -640,8 +674,8 @@ const promptTxt        = document.getElementById('prompt-text');
 const timingEl         = document.getElementById('timing');
 const btnModeVoice     = document.getElementById('btn-mode-voice');
 const btnModeText      = document.getElementById('btn-mode-text');
-const btnModeUpload    = document.getElementById('btn-mode-upload');
 const textControls     = document.getElementById('text-controls');
+const sceneControls    = document.getElementById('scene-controls');
 const sceneInput       = document.getElementById('scene-input');
 const btnTextSubmit    = document.getElementById('btn-text-submit');
 const uploadControls   = document.getElementById('upload-controls');
@@ -649,7 +683,11 @@ const uploadDrop       = document.getElementById('upload-drop');
 const uploadDropLabel  = document.getElementById('upload-drop-label');
 const uploadFile       = document.getElementById('upload-file');
 const uploadDesc       = document.getElementById('upload-desc');
-const uploadHidden     = document.getElementById('upload-hidden');
+const uploadHidden    = document.getElementById('upload-hidden');
+const uploadHiddenGen = document.getElementById('upload-hidden-gen');
+uploadHidden.addEventListener('change',    () => { uploadHiddenGen.checked = uploadHidden.checked; });
+uploadHiddenGen.addEventListener('change', () => { uploadHidden.checked = uploadHiddenGen.checked; });
+function isHideChecked() { return uploadHidden.checked; }
 const btnUploadSubmit  = document.getElementById('btn-upload-submit');
 
 // ============================================================
@@ -672,9 +710,7 @@ async function checkBackendStatus() {
 
     if (data.session_cost)  costSession.textContent  = '$' + data.session_cost.toFixed(3);
     if (data.lifetime_cost) costLifetime.textContent = '$' + data.lifetime_cost.toFixed(3);
-    if (data.server_ips && data.server_ips.length) {
-      document.getElementById('qr-link').style.display = 'block';
-    }
+
   } catch (e) {
     setIndicator(indModel, false, '', 'Backend unreachable');
     setIndicator(indKey,   false, '', 'Backend unreachable');
@@ -862,6 +898,7 @@ async function handleRecordingComplete() {
   }
 
   isGenerating = true;
+  updateAllButtons();
   timingEl.textContent = '';
   transcriptionBox.style.display = 'none';
   transcriptionTxt.textContent   = '';
@@ -870,7 +907,7 @@ async function handleRecordingComplete() {
   showSteps('transcribe');
   setStatus('Transcribing speech...');
   const t0 = Date.now();
-  const liveTimer = startLiveTiming(t0, sec => `Transcribing... ${sec}s`);
+  const liveTimer = startLiveTiming(t0, sec => `${sec}s`);
 
   const blob     = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
   const formData = new FormData();
@@ -908,14 +945,14 @@ async function handleRecordingComplete() {
   showSteps('generate');
   setStatus('Generating image...');
   const transcribeSec = ((t1 - t0) / 1000).toFixed(1);
-  const liveTimer2 = startLiveTiming(t1, sec => `Transcribed in ${transcribeSec}s · Generating... ${sec}s`);
+  const liveTimer2 = startLiveTiming(t1, sec => `${transcribeSec}s · ${sec}s`);
 
   const formData2 = new FormData();
   formData2.append('action',       'generate');
   formData2.append('base_prompt',  basePromptEl.value.trim());
   formData2.append('scene',        transcribeResult.transcription);
   formData2.append('size',         imageSize);
-  formData2.append('hidden',       uploadHidden.checked ? '1' : '0');
+  formData2.append('hidden',       isHideChecked() ? '1' : '0');
 
   let genResult;
   try {
@@ -934,7 +971,7 @@ async function handleRecordingComplete() {
   clearInterval(liveTimer2);
   const t2 = Date.now();
   hideSteps();
-  displayImage(genResult.image_url, genResult.prompt_used, uploadHidden.checked);
+  displayImage(genResult.image_url, genResult.prompt_used, isHideChecked());
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -959,27 +996,21 @@ async function handleRecordingComplete() {
 // ============================================================
 // Mode toggle
 // ============================================================
-btnModeVoice.addEventListener('click',  () => switchMode('voice'));
-btnModeText.addEventListener('click',   () => switchMode('text'));
-btnModeUpload.addEventListener('click', () => switchMode('upload'));
+btnModeVoice.addEventListener('click', () => switchMode('voice'));
+btnModeText.addEventListener('click',  () => switchMode('text'));
 
 function switchMode(mode) {
   currentMode = mode;
-  btnModeVoice.classList.toggle('active',  mode === 'voice');
-  btnModeText.classList.toggle('active',   mode === 'text');
-  btnModeUpload.classList.toggle('active', mode === 'upload');
-  document.getElementById('controls').style.display = mode === 'voice'  ? 'flex' : 'none';
-  textControls.style.display   = mode === 'text'   ? 'flex' : 'none';
-  uploadControls.style.display = mode === 'upload' ? 'flex' : 'none';
+  btnModeVoice.classList.toggle('active', mode === 'voice');
+  btnModeText.classList.toggle('active',  mode === 'text');
+  document.getElementById('controls').style.display = mode === 'voice' ? 'flex' : 'none';
+  sceneControls.style.display = mode === 'text' ? 'block' : 'none';
+  textControls.style.display  = mode === 'text' ? 'flex'  : 'none';
   indMic.style.display      = mode !== 'voice' ? 'none' : '';
   btnGrantMic.style.display = mode !== 'voice' ? 'none' : (micBlocked ? 'block' : 'none');
   if (mode !== 'voice') transcriptionBox.style.display = 'none';
-  const isUpload = mode === 'upload';
-  document.getElementById('prompt-area').style.display  = isUpload ? 'none' : '';
-  document.getElementById('size-toggle').style.display  = isUpload ? 'none' : '';
   updateStartButton();
   updateTextButton();
-  updateUploadButton();
 }
 
 function updateTextButton() {
@@ -1033,13 +1064,13 @@ async function handleUpload() {
   if (files.length === 0) return;
 
   isGenerating = true;
-  updateUploadButton();
+  updateAllButtons();
   stepProgress.style.display   = 'flex';
   stepTranscribe.style.display = 'none';
   stepGenerate.className       = 'step active';
 
   const desc   = uploadDesc.value.trim();
-  const hidden = uploadHidden.checked;
+  const hidden = isHideChecked();
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -1071,6 +1102,7 @@ async function handleUpload() {
   uploadFile.value    = '';
   uploadDesc.value    = '';
   uploadHidden.checked = false;
+  uploadHiddenGen.checked = false;
   updateDropLabel();
   isGenerating = false;
   updateUploadButton();
@@ -1087,7 +1119,7 @@ async function handleTextSubmit() {
 
   isGenerating = true;
   timingEl.textContent = '';
-  updateTextButton();
+  updateAllButtons();
 
   // Show only the generate step
   stepProgress.style.display   = 'flex';
@@ -1095,14 +1127,14 @@ async function handleTextSubmit() {
   stepGenerate.className       = 'step active';
   setStatus('Generating image...');
   const tGen0 = Date.now();
-  const liveTimerText = startLiveTiming(tGen0, sec => `Generating... ${sec}s`);
+  const liveTimerText = startLiveTiming(tGen0, sec => `${sec}s`);
 
   const fd = new FormData();
   fd.append('action',      'generate');
   fd.append('base_prompt', basePrompt);
   fd.append('scene',       sceneText);
   fd.append('size',        imageSize);
-  fd.append('hidden',      uploadHidden.checked ? '1' : '0');
+  fd.append('hidden',      isHideChecked() ? '1' : '0');
 
   let genResult;
   try {
@@ -1121,7 +1153,7 @@ async function handleTextSubmit() {
   clearInterval(liveTimerText);
   const tGen1 = Date.now();
   hideSteps();
-  displayImage(genResult.image_url, genResult.prompt_used, uploadHidden.checked);
+  displayImage(genResult.image_url, genResult.prompt_used, isHideChecked());
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -1149,6 +1181,7 @@ async function handleTextSubmit() {
 // ============================================================
 function showSteps(activeStep) {
   stepProgress.style.display = 'flex';
+  setStatus('');
   if (activeStep === 'transcribe') {
     stepTranscribe.className = 'step active';
     stepGenerate.className   = 'step';
@@ -1170,7 +1203,31 @@ function hideSteps() {
 // ============================================================
 function displayImage(url, prompt = '', isHidden = false) {
   const thumb = addThumb(url, prompt, true, isHidden); // prepend — new images go to the front
-  selectThumb(thumb, url, prompt, true);               // slow fade for freshly generated images
+  // Mark as active in carousel (for gallery tab)
+  galleryCarousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+  thumb.classList.add('active');
+  // Show in generate tab's image-frame
+  showInGenerateFrame(url, true);
+}
+
+function showInGenerateFrame(url, slow = false) {
+  placeholder.style.display = 'none';
+
+  if (currentImg.classList.contains('visible') && currentImg.src !== url) {
+    prevImg.src = currentImg.src;
+    prevImg.classList.toggle('slow', slow);
+    prevImg.style.opacity = '1';
+    prevImg.offsetHeight;
+    prevImg.style.opacity = '0';
+  }
+
+  currentImg.classList.remove('visible');
+  currentImg.classList.toggle('slow', slow);
+  currentImg.src = url;
+  currentImg.onload = () => {
+    imageFrame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
+    currentImg.classList.add('visible');
+  };
 }
 
 function addThumb(url, prompt = '', prepend = false, isHidden = false) {
@@ -1180,6 +1237,7 @@ function addThumb(url, prompt = '', prepend = false, isHidden = false) {
 
   const img = document.createElement('img');
   img.src = url;
+  img.loading = 'lazy';
   img.className = 'thumb';
   img.dataset.prompt = prompt;
   img.addEventListener('click', () => selectThumb(img, url, prompt));
@@ -1208,10 +1266,11 @@ function addThumb(url, prompt = '', prepend = false, isHidden = false) {
     wrap.appendChild(del);
   }
 
-  if (prepend && gallery.firstChild) {
-    gallery.insertBefore(wrap, gallery.firstChild);
+  if (prepend && galleryCarousel.firstChild) {
+    galleryCarousel.insertBefore(wrap, galleryCarousel.firstChild);
+    galleryCarousel.scrollLeft = 0;
   } else {
-    gallery.appendChild(wrap);
+    galleryCarousel.appendChild(wrap);
   }
   return img;
 }
@@ -1252,16 +1311,16 @@ async function deleteImage(wrap, img, url) {
 
   const wasActive = img.classList.contains('active');
   if (wasActive) {
-    const allWraps = [...gallery.querySelectorAll('.thumb-wrap')];
+    const allWraps = [...galleryCarousel.querySelectorAll('.thumb-wrap')];
     const idx      = allWraps.indexOf(wrap);
     const next     = allWraps[idx + 1] || allWraps[idx - 1];
     if (next) {
       const nextImg = next.querySelector('.thumb');
       selectThumb(nextImg, nextImg.src, nextImg.dataset.prompt || '');
     } else {
-      currentImg.classList.remove('visible');
-      currentImg.src = '';
-      placeholder.style.display = '';
+      galleryCurrentImg.classList.remove('visible');
+      galleryCurrentImg.src = '';
+      galleryPlaceholder.style.display = 'flex';
       promptDisplay.style.display = 'none';
     }
   }
@@ -1270,24 +1329,24 @@ async function deleteImage(wrap, img, url) {
 }
 
 function selectThumb(thumbEl, url, prompt, slow = false) {
-  document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+  galleryCarousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
   thumbEl.classList.add('active');
-  placeholder.style.display = 'none';
+  galleryPlaceholder.style.display = 'none';
 
-  if (currentImg.classList.contains('visible') && currentImg.src !== url) {
-    prevImg.src = currentImg.src;
-    prevImg.classList.toggle('slow', slow);
-    prevImg.style.opacity = '1';
-    prevImg.offsetHeight;
-    prevImg.style.opacity = '0';
+  if (galleryCurrentImg.classList.contains('visible') && galleryCurrentImg.src !== url) {
+    galleryPrevImg.src = galleryCurrentImg.src;
+    galleryPrevImg.classList.toggle('slow', slow);
+    galleryPrevImg.style.opacity = '1';
+    galleryPrevImg.offsetHeight;
+    galleryPrevImg.style.opacity = '0';
   }
 
-  currentImg.classList.remove('visible');
-  currentImg.classList.toggle('slow', slow);
-  currentImg.src = url;
-  currentImg.onload = () => {
-    imageFrame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
-    currentImg.classList.add('visible');
+  galleryCurrentImg.classList.remove('visible');
+  galleryCurrentImg.classList.toggle('slow', slow);
+  galleryCurrentImg.src = url;
+  galleryCurrentImg.onload = () => {
+    galleryFrame.style.aspectRatio = `${galleryCurrentImg.naturalWidth} / ${galleryCurrentImg.naturalHeight}`;
+    galleryCurrentImg.classList.add('visible');
   };
   if (prompt) {
     promptTxt.textContent = prompt;
@@ -1307,23 +1366,26 @@ async function loadGallery() {
     if (!data.images || data.images.length === 0) return;
 
     data.images.forEach(item => addThumb(item.url, item.prompt, false, item.hidden ?? false)); // append; API returns newest-first
-
-    // Auto-show the most recent image
-    const first     = data.images[0];
-    const firstThumb = gallery.querySelector('.thumb');
-    if (firstThumb) selectThumb(firstThumb, first.url, first.prompt);
+    // Auto-select the first (newest) image in the gallery frame
+    const first = galleryCarousel.querySelector('.thumb');
+    if (first) selectThumb(first, first.src, first.dataset.prompt || '');
   } catch (_) {
     // non-critical — silently ignore
   }
 }
 
 
+function updateAllButtons() {
+  updateStartButton();
+  updateTextButton();
+  updateUploadButton();
+}
+
 function resetUI() {
   btnCancel.style.display = 'none';
   btnSubmit.style.display = 'none';
   if (currentMode === 'voice') btnStart.style.display = '';
-  updateStartButton();
-  updateTextButton();
+  updateAllButtons();
 }
 
 function updateStartButton() {
@@ -1363,6 +1425,9 @@ function setStatus(msg, isError = false) {
 currentImg.addEventListener('click', () => {
   if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
 });
+galleryCurrentImg.addEventListener('click', () => {
+  if (galleryCurrentImg.classList.contains('visible')) window.open(galleryCurrentImg.src, '_blank');
+});
 
 // ── Base prompt persistence ───────────────────────────────────
 const PROMPT_KEY = 'dnd-atmo-base-prompt';
@@ -1384,7 +1449,23 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   });
 });
 
+// ── Tabs ─────────────────────────────────────────────────────
+document.getElementById('btn-tab-generate').addEventListener('click', () => switchTab('generate'));
+document.getElementById('btn-tab-upload').addEventListener('click',   () => switchTab('upload'));
+document.getElementById('btn-tab-gallery').addEventListener('click',  () => switchTab('gallery'));
+
+function switchTab(tab) {
+  ['generate', 'upload', 'gallery'].forEach(t => {
+    document.getElementById('btn-tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  location.replace('#' + tab);
+}
+
 // ── Boot ─────────────────────────────────────────────────────
+const initialTab = ['generate', 'upload', 'gallery'].includes(location.hash.slice(1))
+  ? location.hash.slice(1) : 'generate';
+switchTab(initialTab);
 preflight();
 </script>
 
