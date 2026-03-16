@@ -367,6 +367,28 @@
     .btn-del:hover { background: #2a0a0a; border-color: #aa5a5a; }
     .thumb-wrap:hover .btn-del { display: block; }
 
+    .btn-hide {
+      display: none;
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      padding: 0;
+      background: rgba(15,5,5,0.88);
+      border: 1px solid #4a4030;
+      color: #8a7a5a;
+      font-size: 0.75rem;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      cursor: pointer;
+    }
+    .btn-hide:hover { background: #181508; border-color: #9a8a5a; color: #c0aa70; }
+    .thumb-wrap:hover .btn-hide { display: block; }
+    .thumb-wrap.hidden .btn-hide { display: block; } /* always visible when hidden */
+    .thumb-wrap.hidden .thumb { opacity: 0.25; filter: grayscale(40%); }
+    .thumb-wrap.hidden .thumb:hover,
+    .thumb-wrap.hidden .thumb.active { opacity: 0.55; }
+
     /* ---- Prompt display ---- */
     #prompt-display {
       display: none;
@@ -945,9 +967,10 @@ function displayImage(url, prompt = '') {
   selectThumb(thumb, url, prompt);
 }
 
-function addThumb(url, prompt = '', prepend = false) {
+function addThumb(url, prompt = '', prepend = false, isHidden = false) {
   const wrap = document.createElement('div');
   wrap.className = 'thumb-wrap';
+  if (isHidden) wrap.classList.add('hidden');
 
   const img = document.createElement('img');
   img.src = url;
@@ -958,6 +981,16 @@ function addThumb(url, prompt = '', prepend = false) {
   wrap.appendChild(img);
 
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'btn-hide';
+    hideBtn.textContent = isHidden ? '●' : '◎';
+    hideBtn.title = isHidden ? 'Show to players' : 'Hide from players';
+    hideBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleHidden(wrap, url, hideBtn);
+    });
+    wrap.appendChild(hideBtn);
+
     const del = document.createElement('button');
     del.className = 'btn-del';
     del.textContent = '×';
@@ -975,6 +1008,24 @@ function addThumb(url, prompt = '', prepend = false) {
     gallery.appendChild(wrap);
   }
   return img;
+}
+
+async function toggleHidden(wrap, url, btn) {
+  const fd = new FormData();
+  fd.append('action', 'toggle_hidden');
+  fd.append('url', url);
+
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    const nowHidden = data.hidden;
+    wrap.classList.toggle('hidden', nowHidden);
+    btn.textContent = nowHidden ? '●' : '◎';
+    btn.title = nowHidden ? 'Show to players' : 'Hide from players';
+  } catch (e) {
+    setStatus('Toggle failed: ' + e.message, true);
+  }
 }
 
 async function deleteImage(wrap, img, url) {
@@ -1037,7 +1088,7 @@ async function loadGallery() {
     const data = await resp.json();
     if (!data.images || data.images.length === 0) return;
 
-    data.images.forEach(item => addThumb(item.url, item.prompt)); // append; API returns newest-first
+    data.images.forEach(item => addThumb(item.url, item.prompt, false, item.hidden ?? false)); // append; API returns newest-first
 
     // Auto-show the most recent image
     const first     = data.images[0];

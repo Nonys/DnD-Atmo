@@ -26,7 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Gallery listing (GET ?action=gallery)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery') {
-    $images = [];
+    $isLocal = in_array(strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]), ['localhost', '127.0.0.1']);
+    $images  = [];
     if (is_dir(SESSIONS_DIR)) {
         $days = glob(SESSIONS_DIR . '/*', GLOB_ONLYDIR) ?: [];
         rsort($days); // newest day first
@@ -35,12 +36,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery
             $files = glob($dayDir . '/image_*.png') ?: [];
             rsort($files); // newest image within day first
             foreach ($files as $imgPath) {
-                $name    = pathinfo($imgPath, PATHINFO_FILENAME);
+                $name       = pathinfo($imgPath, PATHINFO_FILENAME);
+                $hiddenPath = $dayDir . '/' . $name . '.hidden';
+                $isHidden   = file_exists($hiddenPath);
+                if (!$isLocal && $isHidden) continue; // players don't see hidden images
                 $txtPath = $dayDir . '/' . $name . '.txt';
                 $images[] = [
                     'url'    => '/sessions/' . $date . '/' . basename($imgPath),
                     'prompt' => file_exists($txtPath) ? file_get_contents($txtPath) : '',
                     'date'   => $date,
+                    'hidden' => $isHidden,
                 ];
             }
         }
@@ -213,6 +218,40 @@ if ($action === 'generate') {
 }
 
 // ============================================================
+// Action: toggle_hidden
+// Receives: url (POST field)
+// Returns:  { hidden: bool }
+// ============================================================
+if ($action === 'toggle_hidden') {
+    $host = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);
+    if ($host !== 'localhost' && $host !== '127.0.0.1') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Only allowed from localhost']);
+        exit;
+    }
+
+    $url  = trim($_POST['url'] ?? '');
+    $path = realpath(__DIR__ . $url);
+    $base = realpath(SESSIONS_DIR);
+
+    if (!$path || !$base || strpos($path, $base . DIRECTORY_SEPARATOR) !== 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid path']);
+        exit;
+    }
+
+    $hiddenFile = preg_replace('/\.png$/', '.hidden', $path);
+    if (file_exists($hiddenFile)) {
+        @unlink($hiddenFile);
+        echo json_encode(['hidden' => false]);
+    } else {
+        file_put_contents($hiddenFile, '');
+        echo json_encode(['hidden' => true]);
+    }
+    exit;
+}
+
+// ============================================================
 // Action: delete
 // Receives: url (POST field, e.g. /sessions/2026-03-16/image_01.png)
 // Returns:  { ok: true }
@@ -236,7 +275,8 @@ if ($action === 'delete') {
     }
 
     @unlink($path);
-    @unlink(preg_replace('/\.png$/', '.txt', $path));
+    @unlink(preg_replace('/\.png$/', '.txt',    $path));
+    @unlink(preg_replace('/\.png$/', '.hidden', $path));
 
     echo json_encode(['ok' => true]);
     exit;

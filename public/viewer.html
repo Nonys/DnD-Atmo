@@ -165,6 +165,7 @@ const promptTxt    = document.getElementById('prompt-text');
 
 let latestUrl    = null;
 let badgeTimer   = null;
+let knownUrls    = new Set();
 
 async function fetchGallery() {
   try {
@@ -221,7 +222,10 @@ async function init() {
   const images = await fetchGallery();
   if (images.length === 0) return;
 
-  images.forEach(item => addThumb(item.url, item.prompt));
+  images.forEach(item => {
+    knownUrls.add(new URL(item.url, location.href).pathname);
+    addThumb(item.url, item.prompt);
+  });
   latestUrl = images[0].url;
 
   const firstThumb = gallery.querySelector('.thumb');
@@ -229,20 +233,27 @@ async function init() {
   showImage(images[0].url, images[0].prompt);
 }
 
-// Poll for new images
+// Poll for new or newly-revealed images
 async function poll() {
   const images = await fetchGallery();
   if (images.length === 0) return;
 
+  const newItems = images.filter(item => !knownUrls.has(new URL(item.url, location.href).pathname));
+  if (newItems.length === 0) return;
+
+  newItems.forEach(item => {
+    knownUrls.add(new URL(item.url, location.href).pathname);
+    addThumb(item.url, item.prompt, true);
+  });
+
+  // Show the newest visible image
   const newest = images[0];
-  if (newest.url !== latestUrl) {
-    latestUrl = newest.url;
-    const thumb = addThumb(newest.url, newest.prompt, true);
-    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
-    thumb.classList.add('active');
-    showImage(newest.url, newest.prompt);
-    flashBadge();
-  }
+  latestUrl = newest.url;
+  document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+  const firstThumb = gallery.querySelector('.thumb');
+  if (firstThumb) firstThumb.classList.add('active');
+  showImage(newest.url, newest.prompt);
+  flashBadge();
 }
 
 init();
