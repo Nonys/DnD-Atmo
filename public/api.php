@@ -60,7 +60,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'status') {
     $costs = loadCosts();
     $raw = trim((string) getenv('HOST_IPS'));
-    $ips = $raw !== '' ? array_values(array_filter(explode(',', $raw))) : [];
+    if ($raw === '') {
+        $raw = trim((string) shell_exec('hostname -I 2>/dev/null'));
+        // Filter out loopback and Docker bridge ranges (172.16–31.x.x)
+        $all = $raw !== '' ? array_filter(preg_split('/[\s,]+/', $raw)) : [];
+        $ips = array_values(array_filter($all, function (string $ip): bool {
+            return !preg_match('/^(127\.|172\.(1[6-9]|2\d|3[01])\.)/', $ip);
+        }));
+    } else {
+        $ips = array_values(array_filter(explode(',', $raw)));
+    }
     echo json_encode([
         'model_ready'   => file_exists(WHISPER_MODEL),
         'api_key_set'   => OPENAI_API_KEY !== '',

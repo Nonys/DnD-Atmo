@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DnD Atmosphere</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root { --panel: min(800px, calc(100vw - 32px)); }
+
+    body {
+      background: #0d0d0f;
+      color: #c9b99a;
+      font-family: 'Georgia', serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 a {
+      font-size: 1.4rem;
+      letter-spacing: 0.15em;
+      color: #e8d5a3;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      opacity: 0.85;
+      text-decoration: none;
+      display: block;
+    }
+    h1 a:hover { opacity: 1; }
+
+    #image-frame {
+      position: relative;
+      width: min(calc(100vw - 32px), 1400px);
+      aspect-ratio: 1;
+      background: #1a1710;
+      border: 1px solid #3a3020;
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: aspect-ratio 0.4s ease;
+    }
+
+    #current-image, #prev-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #current-image { opacity: 0; transition: opacity 0.5s ease; z-index: 2; }
+    #current-image.slow { transition: opacity 1.2s ease; }
+    #current-image.visible { opacity: 1; cursor: zoom-in; }
+    #prev-image { opacity: 0; z-index: 1; transition: opacity 0.5s ease; }
+    #prev-image.slow { transition: opacity 1.2s ease; }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #4a3f2a;
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      z-index: 0;
+    }
+
+    #prompt-display {
+      display: none;
+      width: var(--panel);
+
+      margin-bottom: 16px;
+    }
+    #prompt-display label {
+      display: block;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 5px;
+    }
+    #prompt-text {
+      background: #0f0e0a;
+      border: 1px solid #2a2518;
+      color: #7a6a4a;
+      font-size: 0.8rem;
+      padding: 8px 10px;
+      line-height: 1.5;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    #gallery-label {
+      width: var(--panel);
+
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 8px;
+    }
+
+    #gallery {
+      width: var(--panel);
+
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border: 1px solid #2a2518;
+      cursor: pointer;
+      opacity: 0.65;
+      transition: opacity 0.2s, border-color 0.2s, transform 0.12s;
+    }
+    .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+    .thumb:active { transform: scale(0.88); }
+
+    #new-badge {
+      display: none;
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: #1a1a0a;
+      border: 1px solid #7a6a2a;
+      color: #e8d070;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      animation: fadein 0.5s ease;
+    }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<h1><a href="/">DnD Atmosphere</a></h1>
+
+<div id="image-frame">
+  <div id="placeholder">Awaiting vision...</div>
+  <img id="prev-image" src="" alt="">
+  <img id="current-image" src="" alt="">
+</div>
+
+<div id="prompt-display">
+  <label>Prompt used</label>
+  <div id="prompt-text"></div>
+</div>
+
+<div id="gallery-label">Session Gallery</div>
+<div id="gallery"></div>
+
+<div id="new-badge">✦ New vision</div>
+
+<script>
+const currentImg    = document.getElementById('current-image');
+const prevImg       = document.getElementById('prev-image');
+const placeholder   = document.getElementById('placeholder');
+const gallery       = document.getElementById('gallery');
+const newBadge      = document.getElementById('new-badge');
+const promptDisplay = document.getElementById('prompt-display');
+const promptTxt     = document.getElementById('prompt-text');
+const imageFrame    = document.getElementById('image-frame');
+
+let latestUrl  = null;
+let badgeTimer = null;
+
+async function fetchGallery() {
+  try {
+    const resp = await fetch('/api.php?action=gallery');
+    const data = await resp.json();
+    return data.images ?? [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function showImage(url, prompt = '', slow = false) {
+  placeholder.style.display = 'none';
+
+  // Crossfade: snapshot current into prev, fade prev out while new fades in
+  if (currentImg.classList.contains('visible') && currentImg.src !== url) {
+    prevImg.src = currentImg.src;
+    prevImg.classList.toggle('slow', slow);
+    prevImg.style.opacity = '1';          // snap to full opacity
+    prevImg.offsetHeight;                 // force reflow so transition fires
+    prevImg.style.opacity = '0';          // now fade out
+  }
+
+  currentImg.classList.remove('visible');
+  currentImg.classList.toggle('slow', slow);
+  currentImg.src = url;
+  currentImg.onload = () => {
+    imageFrame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
+    currentImg.classList.add('visible');
+  };
+  if (prompt) {
+    promptTxt.textContent = prompt;
+    promptDisplay.style.display = 'block';
+  } else {
+    promptDisplay.style.display = 'none';
+  }
+}
+
+function urlPath(url) {
+  return new URL(url, location.href).pathname;
+}
+
+function addThumb(url, prompt = '', prepend = false) {
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'thumb';
+  img.dataset.prompt = prompt;
+  img.addEventListener('click', () => {
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    img.classList.add('active');
+    showImage(url, prompt);
+  });
+  if (prepend && gallery.firstChild) {
+    gallery.insertBefore(img, gallery.firstChild);
+  } else {
+    gallery.appendChild(img);
+  }
+  return img;
+}
+
+
+function flashBadge() {
+  clearTimeout(badgeTimer);
+  newBadge.style.display = 'block';
+  badgeTimer = setTimeout(() => { newBadge.style.display = 'none'; }, 4000);
+}
+
+function thumbMap() {
+  const map = new Map();
+  gallery.querySelectorAll('.thumb').forEach(t => map.set(urlPath(t.src), t));
+  return map;
+}
+
+function clearMain() {
+  currentImg.classList.remove('visible');
+  currentImg.src = '';
+  prevImg.src = '';
+  placeholder.style.display = 'flex';
+  promptDisplay.style.display = 'none';
+  latestUrl = null;
+}
+
+// Full sync: add new images, remove gone ones, enforce API order
+async function sync(isInit = false) {
+  const images = await fetchGallery();
+  const apiMap  = new Map(images.map(item => [urlPath(item.url), item]));
+  const current = thumbMap();
+
+  // Remove thumbnails no longer in the API (deleted or hidden)
+  let removedActive = false;
+  for (const [path, thumb] of current) {
+    if (!apiMap.has(path)) {
+      if (thumb.classList.contains('active')) removedActive = true;
+      thumb.remove();
+    }
+  }
+
+  if (images.length === 0) { clearMain(); return; }
+
+  // Add thumbnails that appeared since last sync (new or revealed)
+  let addedAny = false;
+  for (const [path, item] of apiMap) {
+    if (!current.has(path)) {
+      addThumb(item.url, item.prompt); // append; we reorder below
+      addedAny = true;
+    }
+  }
+
+  // Reorder gallery to always match API order (appendChild moves existing nodes)
+  const thumbsAfter = new Map();
+  gallery.querySelectorAll('.thumb').forEach(t => thumbsAfter.set(urlPath(t.src), t));
+  for (const [path] of apiMap) {
+    const thumb = thumbsAfter.get(path);
+    if (thumb) gallery.appendChild(thumb);
+  }
+
+  const newest = images[0];
+
+  if (isInit || removedActive || addedAny) {
+    const newestThumb = [...gallery.querySelectorAll('.thumb')].find(t => urlPath(t.src) === urlPath(newest.url));
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    if (newestThumb) newestThumb.classList.add('active');
+    showImage(newest.url, newest.prompt ?? '', !isInit && addedAny);
+    latestUrl = newest.url;
+    if (!isInit && addedAny) flashBadge();
+  } else if (removedActive) {
+    const firstThumb = gallery.querySelector('.thumb');
+    if (firstThumb) {
+      firstThumb.classList.add('active');
+      showImage(firstThumb.src, firstThumb.dataset.prompt ?? '');
+      latestUrl = firstThumb.src;
+    } else {
+      clearMain();
+    }
+  }
+}
+
+sync(true);
+currentImg.addEventListener('click', () => {
+  if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
+});
+
+setInterval(() => sync(false), 5000);
+</script>
+
+</body>
+</html>
