@@ -1011,6 +1011,7 @@ function switchMode(mode) {
   if (mode !== 'voice') transcriptionBox.style.display = 'none';
   updateStartButton();
   updateTextButton();
+  location.replace('#generate-' + mode);
 }
 
 function updateTextButton() {
@@ -1460,12 +1461,14 @@ function switchTab(tab) {
     document.getElementById('btn-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
-  location.replace('#' + tab);
+  location.replace('#' + (tab === 'generate' ? 'generate-' + currentMode : tab));
 }
 
 // ── Boot ─────────────────────────────────────────────────────
-const initialTab = ['generate', 'upload', 'gallery'].includes(location.hash.slice(1))
-  ? location.hash.slice(1) : 'generate';
+const hashParts = location.hash.slice(1).split('-');
+const initialTab  = ['generate', 'upload', 'gallery'].includes(hashParts[0]) ? hashParts[0] : 'generate';
+const initialMode = hashParts[1] === 'text' ? 'text' : 'voice';
+switchMode(initialMode);
 switchTab(initialTab);
 preflight();
 </script>
