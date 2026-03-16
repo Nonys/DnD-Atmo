@@ -192,6 +192,51 @@
     #scene-input:focus { outline: none; border-color: #6a5a3a; }
     #scene-input::placeholder { color: #3a3020; }
 
+    /* ---- Upload mode controls ---- */
+    #upload-controls {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 512px;
+      max-width: 100%;
+    }
+    #upload-drop {
+      width: 100%;
+      min-height: 90px;
+      background: #141210;
+      border: 1px dashed #3a3020;
+      color: #4a3f2a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      position: relative;
+    }
+    #upload-drop:hover, #upload-drop.dragover { border-color: #6a5a3a; color: #9a8a6a; }
+    #upload-drop.has-file { border-color: #4a7a4a; color: #7aba7a; }
+    #upload-drop input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #upload-desc {
+      width: 100%;
+      height: 60px;
+      background: #141210;
+      border: 1px solid #3a3020;
+      color: #c9b99a;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 8px 10px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #upload-desc:focus { outline: none; border-color: #6a5a3a; }
+    #upload-desc::placeholder { color: #3a3020; }
+
     #timer {
       font-size: 2rem;
       font-variant-numeric: tabular-nums;
@@ -427,6 +472,7 @@
 <div id="mode-toggle">
   <button class="mode-btn active" id="btn-mode-voice">&#9679; Voice</button>
   <button class="mode-btn"        id="btn-mode-text">&#10002; Type</button>
+  <button class="mode-btn"        id="btn-mode-upload">&#8679; Upload</button>
 </div>
 
 <div id="step-progress">
@@ -445,6 +491,15 @@
 <div id="text-controls">
   <textarea id="scene-input" placeholder="Describe the scene..."></textarea>
   <button id="btn-text-submit" disabled>&#10024; Do The Magic</button>
+</div>
+
+<div id="upload-controls">
+  <div id="upload-drop">
+    <span id="upload-drop-label">Click or drop an image here</span>
+    <input type="file" id="upload-file" accept="image/*">
+  </div>
+  <textarea id="upload-desc" placeholder="Description (optional)"></textarea>
+  <button id="btn-upload-submit" disabled>&#8679; Add to Gallery</button>
 </div>
 
 <div id="status">Checking prerequisites...</div>
@@ -518,9 +573,16 @@ const promptDisplay    = document.getElementById('prompt-display');
 const promptTxt        = document.getElementById('prompt-text');
 const btnModeVoice     = document.getElementById('btn-mode-voice');
 const btnModeText      = document.getElementById('btn-mode-text');
+const btnModeUpload    = document.getElementById('btn-mode-upload');
 const textControls     = document.getElementById('text-controls');
 const sceneInput       = document.getElementById('scene-input');
 const btnTextSubmit    = document.getElementById('btn-text-submit');
+const uploadControls   = document.getElementById('upload-controls');
+const uploadDrop       = document.getElementById('upload-drop');
+const uploadDropLabel  = document.getElementById('upload-drop-label');
+const uploadFile       = document.getElementById('upload-file');
+const uploadDesc       = document.getElementById('upload-desc');
+const btnUploadSubmit  = document.getElementById('btn-upload-submit');
 
 // ============================================================
 // Pre-flight checks (run on load)
@@ -819,20 +881,24 @@ async function handleRecordingComplete() {
 // ============================================================
 // Mode toggle
 // ============================================================
-btnModeVoice.addEventListener('click', () => switchMode('voice'));
-btnModeText.addEventListener('click',  () => switchMode('text'));
+btnModeVoice.addEventListener('click',  () => switchMode('voice'));
+btnModeText.addEventListener('click',   () => switchMode('text'));
+btnModeUpload.addEventListener('click', () => switchMode('upload'));
 
 function switchMode(mode) {
   currentMode = mode;
-  btnModeVoice.classList.toggle('active', mode === 'voice');
-  btnModeText.classList.toggle('active',  mode === 'text');
-  document.getElementById('controls').style.display = mode === 'voice' ? 'flex'  : 'none';
-  textControls.style.display = mode === 'text'  ? 'flex'  : 'none';
-  indMic.style.display       = mode === 'text'  ? 'none'  : '';
-  btnGrantMic.style.display  = mode === 'text'  ? 'none'  : (micBlocked ? '' : 'none');
-  if (mode === 'voice') transcriptionBox.style.display = 'none';
+  btnModeVoice.classList.toggle('active',  mode === 'voice');
+  btnModeText.classList.toggle('active',   mode === 'text');
+  btnModeUpload.classList.toggle('active', mode === 'upload');
+  document.getElementById('controls').style.display = mode === 'voice'  ? 'flex' : 'none';
+  textControls.style.display   = mode === 'text'   ? 'flex' : 'none';
+  uploadControls.style.display = mode === 'upload' ? 'flex' : 'none';
+  indMic.style.display      = mode !== 'voice' ? 'none' : '';
+  btnGrantMic.style.display = mode !== 'voice' ? 'none' : (micBlocked ? 'block' : 'none');
+  if (mode !== 'voice') transcriptionBox.style.display = 'none';
   updateStartButton();
   updateTextButton();
+  updateUploadButton();
 }
 
 function updateTextButton() {
@@ -841,6 +907,83 @@ function updateTextButton() {
 }
 
 sceneInput.addEventListener('input', updateTextButton);
+
+// ============================================================
+// Upload mode
+// ============================================================
+function updateUploadButton() {
+  btnUploadSubmit.disabled = isGenerating || !uploadFile.files || uploadFile.files.length === 0;
+}
+
+uploadFile.addEventListener('change', () => {
+  if (uploadFile.files && uploadFile.files.length > 0) {
+    uploadDropLabel.textContent = uploadFile.files[0].name;
+    uploadDrop.classList.add('has-file');
+  } else {
+    uploadDropLabel.textContent = 'Click or drop an image here';
+    uploadDrop.classList.remove('has-file');
+  }
+  updateUploadButton();
+});
+
+uploadDrop.addEventListener('dragover', e => { e.preventDefault(); uploadDrop.classList.add('dragover'); });
+uploadDrop.addEventListener('dragleave', () => uploadDrop.classList.remove('dragover'));
+uploadDrop.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadDrop.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) {
+    const dt = new DataTransfer();
+    dt.items.add(e.dataTransfer.files[0]);
+    uploadFile.files = dt.files;
+    uploadDropLabel.textContent = e.dataTransfer.files[0].name;
+    uploadDrop.classList.add('has-file');
+    updateUploadButton();
+  }
+});
+
+btnUploadSubmit.addEventListener('click', handleUpload);
+
+async function handleUpload() {
+  const file = uploadFile.files[0];
+  if (!file) return;
+
+  isGenerating = true;
+  updateUploadButton();
+  stepProgress.style.display   = 'flex';
+  stepTranscribe.style.display = 'none';
+  stepGenerate.className       = 'step active';
+  setStatus('Uploading image...');
+
+  const fd = new FormData();
+  fd.append('action',      'upload');
+  fd.append('image',       file, file.name);
+  fd.append('description', uploadDesc.value.trim());
+
+  let result;
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    result = await resp.json();
+    if (!resp.ok) throw new Error(result.error ?? `HTTP ${resp.status}`);
+  } catch (err) {
+    hideSteps();
+    setStatus('Upload failed: ' + err.message, true);
+    isGenerating = false;
+    updateUploadButton();
+    return;
+  }
+
+  hideSteps();
+  displayImage(result.image_url, result.prompt_used);
+  setStatus('Image added to gallery.');
+
+  // Reset upload form
+  uploadFile.value = '';
+  uploadDesc.value = '';
+  uploadDropLabel.textContent = 'Click or drop an image here';
+  uploadDrop.classList.remove('has-file');
+  isGenerating = false;
+  updateUploadButton();
+}
 
 // ============================================================
 // Text mode submit

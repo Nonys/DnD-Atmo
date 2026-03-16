@@ -25,4 +25,4 @@ RUN mkdir -p /app/public/sessions /app/models /app/data
 
 EXPOSE 8080
 
-CMD ["php", "-S", "0.0.0.0:8080", "-t", "/app/public"]
+CMD ["php", "-d", "upload_max_filesize=50M", "-d", "post_max_size=55M", "-S", "0.0.0.0:8080", "-t", "/app/public"]

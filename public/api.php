@@ -187,9 +187,7 @@ if ($action === 'generate') {
         mkdir($sessionDir, 0755, true);
     }
 
-    $existing  = glob($sessionDir . '/image_*.png') ?: [];
-    $nextNum   = count($existing) + 1;
-    $imageName = sprintf('image_%02d', $nextNum);
+    $imageName = nextImageName($sessionDir);
     $imagePath = "$sessionDir/$imageName.png";
 
     file_put_contents($imagePath, base64_decode($imageB64));
@@ -213,6 +211,73 @@ if ($action === 'generate') {
         'cost_image'    => IMAGE_COST_USD,
         'cost_session'  => $costs['session_cost'],
         'cost_lifetime' => $costs['lifetime_cost'],
+    ]);
+    exit;
+}
+
+// ============================================================
+// Action: upload
+// Receives: image file (multipart) + optional description
+// Returns:  { image_url, prompt_used }
+// ============================================================
+if ($action === 'upload') {
+    $imageFile = $_FILES['image'] ?? null;
+    if (!$imageFile || $imageFile['error'] !== UPLOAD_ERR_OK) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No image file received']);
+        exit;
+    }
+
+    // Validate it's actually an image
+    $mime = mime_content_type($imageFile['tmp_name']);
+    if (!in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'File must be an image (PNG, JPEG, GIF, WEBP)']);
+        exit;
+    }
+
+    $description = trim($_POST['description'] ?? '');
+
+    // Save to sessions dir
+    $today      = date('Y-m-d');
+    $sessionDir = SESSIONS_DIR . '/' . $today;
+    if (!is_dir($sessionDir)) {
+        mkdir($sessionDir, 0755, true);
+    }
+
+    $imageName = nextImageName($sessionDir);
+    $imagePath = "$sessionDir/$imageName.png";
+
+    // Convert to PNG if needed, otherwise copy to destination
+    if ($mime === 'image/png') {
+        if (!copy($imageFile['tmp_name'], $imagePath)) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to save uploaded image']);
+            exit;
+        }
+        @unlink($imageFile['tmp_name']);
+    } else {
+        $cmd = sprintf(
+            'ffmpeg -y -i %s %s 2>/dev/null',
+            escapeshellarg($imageFile['tmp_name']),
+            escapeshellarg($imagePath)
+        );
+        exec($cmd, $out, $rc);
+        @unlink($imageFile['tmp_name']);
+        if ($rc !== 0 || !file_exists($imagePath)) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Image conversion failed']);
+            exit;
+        }
+    }
+
+    if ($description !== '') {
+        file_put_contents("$sessionDir/$imageName.txt", $description);
+    }
+
+    echo json_encode([
+        'image_url'  => '/sessions/' . $today . '/' . $imageName . '.png',
+        'prompt_used' => $description,
     ]);
     exit;
 }
@@ -289,6 +354,18 @@ echo json_encode(['error' => 'Unknown action']);
 // ============================================================
 // Helpers
 // ============================================================
+
+function nextImageName(string $sessionDir): string
+{
+    $existing = glob($sessionDir . '/image_*.png') ?: [];
+    $max = 0;
+    foreach ($existing as $f) {
+        if (preg_match('/image_(\d+)\.png$/', $f, $m)) {
+            $max = max($max, (int) $m[1]);
+        }
+    }
+    return sprintf('image_%02d', $max + 1);
+}
 
 function buildPrompt(string $style, string $scene): string
 {
