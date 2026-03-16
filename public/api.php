@@ -16,14 +16,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Gallery listing (GET ?action=gallery)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery') {
+    $images = [];
+    if (is_dir(SESSIONS_DIR)) {
+        $days = glob(SESSIONS_DIR . '/*', GLOB_ONLYDIR) ?: [];
+        rsort($days); // newest day first
+        foreach ($days as $dayDir) {
+            $date  = basename($dayDir);
+            $files = glob($dayDir . '/image_*.png') ?: [];
+            rsort($files); // newest image within day first
+            foreach ($files as $imgPath) {
+                $name    = pathinfo($imgPath, PATHINFO_FILENAME);
+                $txtPath = $dayDir . '/' . $name . '.txt';
+                $images[] = [
+                    'url'    => '/sessions/' . $date . '/' . basename($imgPath),
+                    'prompt' => file_exists($txtPath) ? file_get_contents($txtPath) : '',
+                    'date'   => $date,
+                ];
+            }
+        }
+    }
+    echo json_encode(['images' => $images]);
+    exit;
+}
+
 // Status check (GET ?action=status)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'status') {
     $costs = loadCosts();
+    $raw = trim((string) getenv('HOST_IPS'));
+    $ips = $raw !== '' ? array_values(array_filter(explode(',', $raw))) : [];
     echo json_encode([
         'model_ready'   => file_exists(WHISPER_MODEL),
         'api_key_set'   => OPENAI_API_KEY !== '',
         'session_cost'  => $costs['session_cost']  ?? 0.0,
         'lifetime_cost' => $costs['lifetime_cost'] ?? 0.0,
+        'server_ips'    => $ips,
     ]);
     exit;
 }
@@ -34,127 +62,151 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// --- Input ---
-$basePrompt = trim($_POST['base_prompt'] ?? '');
-if ($basePrompt === '') {
-    $basePrompt = 'fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting';
-}
+$action = $_POST['action'] ?? '';
 
-$audioFile = $_FILES['audio'] ?? null;
-if (!$audioFile || $audioFile['error'] !== UPLOAD_ERR_OK) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No audio file received']);
-    exit;
-}
+// ============================================================
+// Action: transcribe
+// Receives: audio file (multipart) + base_prompt
+// Returns:  { transcription, final_prompt }
+// ============================================================
+if ($action === 'transcribe') {
+    $basePrompt = trim($_POST['base_prompt'] ?? '');
+    if ($basePrompt === '') {
+        $basePrompt = 'fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting';
+    }
 
-// --- Save & convert audio ---
-$tmpId    = uniqid('dnd_', true);
-$tmpDir   = sys_get_temp_dir();
-$tmpOrig  = "$tmpDir/{$tmpId}.webm";
-$tmpWav   = "$tmpDir/{$tmpId}.wav";
+    $audioFile = $_FILES['audio'] ?? null;
+    if (!$audioFile || $audioFile['error'] !== UPLOAD_ERR_OK) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No audio file received']);
+        exit;
+    }
 
-if (!move_uploaded_file($audioFile['tmp_name'], $tmpOrig)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Failed to save audio upload']);
-    exit;
-}
+    // Save & convert to 16kHz mono WAV
+    $tmpId   = uniqid('dnd_', true);
+    $tmpDir  = sys_get_temp_dir();
+    $tmpOrig = "$tmpDir/{$tmpId}.webm";
+    $tmpWav  = "$tmpDir/{$tmpId}.wav";
 
-// Convert to 16kHz mono WAV (whisper requirement)
-$cmd = sprintf(
-    'ffmpeg -y -i %s -ar 16000 -ac 1 -f wav %s 2>/dev/null',
-    escapeshellarg($tmpOrig),
-    escapeshellarg($tmpWav)
-);
-exec($cmd, $out, $rc);
+    if (!move_uploaded_file($audioFile['tmp_name'], $tmpOrig)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save audio upload']);
+        exit;
+    }
 
-@unlink($tmpOrig);
-
-if ($rc !== 0 || !file_exists($tmpWav)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Audio conversion failed (ffmpeg)']);
-    exit;
-}
-
-// --- Transcribe with whisper.cpp ---
-$transcription = '';
-if (file_exists(WHISPER_MODEL)) {
-    $whisperCmd = sprintf(
-        '%s -m %s -f %s -l cs -nt 2>/dev/null',
-        escapeshellarg(WHISPER_BIN),
-        escapeshellarg(WHISPER_MODEL),
+    $cmd = sprintf(
+        'ffmpeg -y -i %s -ar 16000 -ac 1 -f wav %s 2>/dev/null',
+        escapeshellarg($tmpOrig),
         escapeshellarg($tmpWav)
     );
-    exec($whisperCmd, $whisperOut, $whisperRc);
-    if ($whisperRc === 0) {
-        $transcription = trim(implode(' ', $whisperOut));
+    exec($cmd, $out, $rc);
+    @unlink($tmpOrig);
+
+    if ($rc !== 0 || !file_exists($tmpWav)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Audio conversion failed (ffmpeg)']);
+        exit;
     }
-} // silently skip transcription if model not present
 
-@unlink($tmpWav);
-
-// --- Build final prompt ---
-$finalPrompt = $basePrompt;
-if ($transcription !== '') {
-    $finalPrompt .= "\n\n" . $transcription;
-}
-
-// --- Generate image (up to 3 retries) ---
-$imageB64  = null;
-$lastError = 'Unknown error';
-
-for ($attempt = 1; $attempt <= 3; $attempt++) {
-    $result = callOpenAI($finalPrompt);
-    if ($result['ok']) {
-        $imageB64 = $result['b64'];
-        break;
+    // Transcribe
+    $transcription = '';
+    if (file_exists(WHISPER_MODEL)) {
+        $whisperCmd = sprintf(
+            '%s -m %s -f %s -l cs -nt 2>/dev/null',
+            escapeshellarg(WHISPER_BIN),
+            escapeshellarg(WHISPER_MODEL),
+            escapeshellarg($tmpWav)
+        );
+        exec($whisperCmd, $whisperOut, $whisperRc);
+        if ($whisperRc === 0) {
+            $transcription = trim(implode(' ', $whisperOut));
+        }
     }
-    $lastError = $result['error'];
-    if ($attempt < 3) {
-        sleep(3);
-    }
-}
+    @unlink($tmpWav);
 
-if ($imageB64 === null) {
-    http_response_code(502);
-    echo json_encode(['error' => "Image generation failed after 3 attempts: $lastError"]);
+    $finalPrompt = $basePrompt;
+    if ($transcription !== '') {
+        $finalPrompt .= "\n\n" . $transcription;
+    }
+
+    echo json_encode([
+        'transcription' => $transcription,
+        'final_prompt'  => $finalPrompt,
+    ]);
     exit;
 }
 
-// --- Save image ---
-$today      = date('Y-m-d');
-$sessionDir = SESSIONS_DIR . '/' . $today;
-if (!is_dir($sessionDir)) {
-    mkdir($sessionDir, 0755, true);
+// ============================================================
+// Action: generate
+// Receives: final_prompt (POST field)
+// Returns:  { image_url, cost_image, cost_session, cost_lifetime }
+// ============================================================
+if ($action === 'generate') {
+    $finalPrompt = trim($_POST['final_prompt'] ?? '');
+    if ($finalPrompt === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'final_prompt is required']);
+        exit;
+    }
+
+    // Generate image (up to 3 retries)
+    $imageB64  = null;
+    $lastError = 'Unknown error';
+
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        $result = callOpenAI($finalPrompt);
+        if ($result['ok']) {
+            $imageB64 = $result['b64'];
+            break;
+        }
+        $lastError = $result['error'];
+        if ($attempt < 3) sleep(3);
+    }
+
+    if ($imageB64 === null) {
+        http_response_code(502);
+        echo json_encode(['error' => "Image generation failed: $lastError"]);
+        exit;
+    }
+
+    // Save image
+    $today      = date('Y-m-d');
+    $sessionDir = SESSIONS_DIR . '/' . $today;
+    if (!is_dir($sessionDir)) {
+        mkdir($sessionDir, 0755, true);
+    }
+
+    $existing  = glob($sessionDir . '/image_*.png') ?: [];
+    $nextNum   = count($existing) + 1;
+    $imageName = sprintf('image_%02d', $nextNum);
+    $imagePath = "$sessionDir/$imageName.png";
+
+    file_put_contents($imagePath, base64_decode($imageB64));
+
+    // Also save the prompt alongside the image
+    file_put_contents("$sessionDir/$imageName.txt", $finalPrompt);
+
+    // Update costs
+    $costs = loadCosts();
+    if (($costs['session_date'] ?? '') !== $today) {
+        $costs['session_cost'] = 0.0;
+        $costs['session_date'] = $today;
+    }
+    $costs['session_cost']  = round(($costs['session_cost']  ?? 0) + IMAGE_COST_USD, 4);
+    $costs['lifetime_cost'] = round(($costs['lifetime_cost'] ?? 0) + IMAGE_COST_USD, 4);
+    saveCosts($costs);
+
+    echo json_encode([
+        'image_url'     => '/sessions/' . $today . '/' . $imageName . '.png',
+        'cost_image'    => IMAGE_COST_USD,
+        'cost_session'  => $costs['session_cost'],
+        'cost_lifetime' => $costs['lifetime_cost'],
+    ]);
+    exit;
 }
 
-$existing  = glob($sessionDir . '/image_*.png') ?: [];
-$nextNum   = count($existing) + 1;
-$imageName = sprintf('image_%02d', $nextNum);
-$imagePath = "$sessionDir/$imageName.png";
-$txtPath   = "$sessionDir/$imageName.txt";
-
-file_put_contents($imagePath, base64_decode($imageB64));
-file_put_contents($txtPath, $finalPrompt);
-
-// --- Update costs ---
-$costs = loadCosts();
-if (($costs['session_date'] ?? '') !== $today) {
-    $costs['session_cost'] = 0.0;
-    $costs['session_date'] = $today;
-}
-$costs['session_cost']  = round(($costs['session_cost']  ?? 0) + IMAGE_COST_USD, 4);
-$costs['lifetime_cost'] = round(($costs['lifetime_cost'] ?? 0) + IMAGE_COST_USD, 4);
-saveCosts($costs);
-
-// --- Response ---
-echo json_encode([
-    'image_url'     => '/sessions/' . $today . '/' . $imageName . '.png',
-    'prompt_used'   => $finalPrompt,
-    'transcription' => $transcription,
-    'cost_image'    => IMAGE_COST_USD,
-    'cost_session'  => $costs['session_cost'],
-    'cost_lifetime' => $costs['lifetime_cost'],
-]);
+http_response_code(400);
+echo json_encode(['error' => 'Unknown action']);
 
 
 // ============================================================

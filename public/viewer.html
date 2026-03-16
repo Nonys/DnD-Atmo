@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DnD Atmosphere</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0f;
+      color: #c9b99a;
+      font-family: 'Georgia', serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      letter-spacing: 0.15em;
+      color: #e8d5a3;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      opacity: 0.85;
+    }
+
+    #image-frame {
+      position: relative;
+      width: 512px;
+      max-width: 100%;
+      aspect-ratio: 1;
+      background: #1a1710;
+      border: 1px solid #3a3020;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    #current-image, #prev-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #current-image { opacity: 0; transition: opacity 1.2s ease; z-index: 2; }
+    #current-image.visible { opacity: 1; }
+    #prev-image    { opacity: 0.25; z-index: 1; }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #4a3f2a;
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      z-index: 0;
+    }
+
+    #gallery-label {
+      width: 512px;
+      max-width: 100%;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 8px;
+    }
+
+    #gallery {
+      width: 512px;
+      max-width: 100%;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border: 1px solid #2a2518;
+      cursor: pointer;
+      opacity: 0.65;
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+
+    #new-badge {
+      display: none;
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: #1a1a0a;
+      border: 1px solid #7a6a2a;
+      color: #e8d070;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      animation: fadein 0.5s ease;
+    }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<h1>DnD Atmosphere</h1>
+
+<div id="image-frame">
+  <div id="placeholder">Awaiting vision...</div>
+  <img id="prev-image" src="" alt="">
+  <img id="current-image" src="" alt="">
+</div>
+
+<div id="gallery-label">Session Gallery</div>
+<div id="gallery"></div>
+
+<div id="new-badge">✦ New vision</div>
+
+<script>
+const currentImg  = document.getElementById('current-image');
+const prevImg     = document.getElementById('prev-image');
+const placeholder = document.getElementById('placeholder');
+const gallery     = document.getElementById('gallery');
+const newBadge    = document.getElementById('new-badge');
+
+let latestUrl = null;
+let badgeTimer = null;
+
+async function fetchGallery() {
+  try {
+    const resp = await fetch('/api.php?action=gallery');
+    const data = await resp.json();
+    return data.images ?? [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function showImage(url) {
+  placeholder.style.display = 'none';
+  if (currentImg.src && !currentImg.src.endsWith('undefined') && currentImg.src !== url) {
+    prevImg.src = currentImg.src;
+  }
+  currentImg.classList.remove('visible');
+  currentImg.src = url;
+  currentImg.onload = () => currentImg.classList.add('visible');
+}
+
+function addThumb(url, prepend = false) {
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'thumb';
+  img.addEventListener('click', () => {
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    img.classList.add('active');
+    showImage(url);
+  });
+  if (prepend && gallery.firstChild) {
+    gallery.insertBefore(img, gallery.firstChild);
+  } else {
+    gallery.appendChild(img);
+  }
+  return img;
+}
+
+function flashBadge() {
+  clearTimeout(badgeTimer);
+  newBadge.style.display = 'block';
+  badgeTimer = setTimeout(() => { newBadge.style.display = 'none'; }, 4000);
+}
+
+// Initial load
+async function init() {
+  const images = await fetchGallery();
+  if (images.length === 0) return;
+
+  images.forEach(item => addThumb(item.url));
+  latestUrl = images[0].url;
+
+  const firstThumb = gallery.querySelector('.thumb');
+  if (firstThumb) firstThumb.classList.add('active');
+  showImage(latestUrl);
+}
+
+// Poll for new images
+async function poll() {
+  const images = await fetchGallery();
+  if (images.length === 0) return;
+
+  const newestUrl = images[0].url;
+  if (newestUrl !== latestUrl) {
+    latestUrl = newestUrl;
+    const thumb = addThumb(newestUrl, true);
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    thumb.classList.add('active');
+    showImage(newestUrl);
+    flashBadge();
+  }
+}
+
+init();
+setInterval(poll, 5000);
+</script>
+</body>
+</html>

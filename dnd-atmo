@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ── colours ──────────────────────────────────────────────────
@@ -78,7 +78,7 @@ cmd_run() {
     else
         warn "No model at models/ggml-model.bin"
         info "Transcription will be skipped (image generation still works)"
-        info "To download:  ./dnd model"
+        info "To download:  ./dnd-atmo model"
     fi
 
     # 4. Runtime directories -----------------------------------
@@ -99,7 +99,14 @@ cmd_run() {
     echo -e "  ${CYAN}→${NC} http://$(hostname -I | awk '{print $1}'):8080  (LAN)"
     echo ""
 
-    docker compose up --build
+    HOST_IPS="$(hostname -I | tr ' ' ',' | sed 's/,*$//')" \
+    docker compose up --build -d
+    echo -e "${CYAN}→${NC} Logs: dnd-atmo logs\n"
+}
+
+# ────────────────────────────────────────────────────────────
+cmd_logs() {
+    docker compose logs -f --tail=50
 }
 
 # ────────────────────────────────────────────────────────────
@@ -110,8 +117,9 @@ cmd_stop() {
 }
 
 # ────────────────────────────────────────────────────────────
-cmd_logs() {
-    docker compose logs -f --tail=50
+cmd_restart() {
+    cmd_stop
+    cmd_run
 }
 
 # ────────────────────────────────────────────────────────────
@@ -158,16 +166,17 @@ cmd_model() {
 _abort() {
     echo ""
     hr
-    echo -e "${RED}Startup aborted — fix the errors above and retry:${NC}  dnd run"
+    echo -e "${RED}Startup aborted — fix the errors above and retry:${NC}  dnd-atmo run"
     echo ""
     exit 1
 }
 
 _usage() {
     echo ""
-    echo -e "${BOLD}Usage:${NC}  dnd <command>"
+    echo -e "${BOLD}Usage:${NC}  dnd-atmo<command>"
     echo ""
-    echo "  run              Check setup and start the app"
+    echo "  run              Check setup and start the app (detached)"
+    echo "  restart          Restart containers"
     echo "  stop             Stop containers"
     echo "  logs             Tail container logs"
     echo "  model [size]     Download a Whisper model (tiny/base/small/medium/large)"
@@ -178,8 +187,9 @@ _usage() {
 # ────────────────────────────────────────────────────────────
 case "${1:-}" in
     run)   cmd_run ;;
-    stop)  cmd_stop ;;
     logs)  cmd_logs ;;
-    model) cmd_model "${2:-medium}" ;;
+  restart) cmd_restart ;;
+  stop)  cmd_stop ;;
+      model) cmd_model "${2:-medium}" ;;
     *)     _usage ;;
 esac
