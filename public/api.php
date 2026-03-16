@@ -383,17 +383,15 @@ function buildPrompt(string $style, string $scene): string
 {
     $parts = [];
 
-    $parts[] = 'You are DnD tool which helps DM visualize his speech or text.';
-
     if ($style !== '') {
-        $parts[] = "World atmosphere and visual style: {$style}";
+        $parts[] = $style;
     }
 
     if ($scene !== '') {
         $parts[] = "Scene to depict: {$scene}";
     }
 
-    $parts[] = PROMPT_GUARDRAILS;
+//    $parts[] = PROMPT_GUARDRAILS;
 
     return implode("\n\n", $parts);
 }
