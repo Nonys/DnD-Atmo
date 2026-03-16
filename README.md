@@ -1,7 +1,7 @@
 # DnD Atmosphere Generator
 
-Generates atmospheric images from spoken Czech descriptions during DnD sessions.
-You describe a scene out loud → it gets transcribed → an image is generated.
+Speak a scene description in Czech → it gets transcribed → a atmospheric image is generated.
+Built for DnD sessions: the DM generates images, players see them live on their own devices.
 
 ## Requirements
 
@@ -20,9 +20,7 @@ cp .env.example .env
 
 **2. Download a Whisper model**
 
-Whisper is the speech recognition engine that converts your spoken Czech into text.
-The model file is the neural network that does the actual transcription — you choose
-the quality/speed trade-off by picking which one to download:
+Whisper converts your spoken Czech into text. Pick a model based on your hardware:
 
 | Model | Size | Czech quality | Transcription time (CPU) |
 |-------|------|---------------|--------------------------|
@@ -33,44 +31,63 @@ the quality/speed trade-off by picking which one to download:
 | `large` | 2.9 GB | best | ~4 min |
 
 ```bash
-dnd-atmo model medium
+./dnd-atmo model medium
 ```
-
-You can re-run this with a different size at any time to swap the model.
-
-> Without a model the app cannot transcribe speech, so the Record button is disabled.
-> Image generation from the base prompt alone is intentionally blocked — it would
-> produce the same generic image every time and waste API credits.
 
 **3. Start**
 
 ```bash
-dnd-atmo run
+./dnd-atmo run
 ```
 
-The app runs on `http://localhost:8080` and is accessible on your LAN.
-First start takes several minutes to build (compiles whisper.cpp from source).
-Subsequent starts are instant.
+First start takes several minutes (compiles whisper.cpp from source). Subsequent starts are instant.
 
-## Usage
+## DM Interface — `localhost:8080`
 
-1. Edit the **Base Style Prompt** to set the visual style for your session
-2. Click **Record** and describe the current scene in Czech
-3. Click **Stop** — the app transcribes your speech and generates an image
-4. The image fades in; previous images are kept in the gallery strip below
+Open this on the machine running the app.
+
+1. Set the **Base Style Prompt** to define the visual style for your session
+2. Click **Start Listen** and describe the current scene in Czech
+3. Click **Do The Magic** to submit — or **I Changed My Mind** to cancel
+4. The transcription appears while the image generates so you can verify what was heard
+5. The image fades in; all session images are kept in the gallery strip below
+
+**Gallery management:** hover any thumbnail to reveal a `×` delete button.
+Delete is only available from `localhost` — players cannot delete images.
+
+**QR codes:** a "Show player QR codes" toggle appears below the title once the app is running.
+Scan one to open the player viewer on any device on the same network.
 
 There is a 30-second cooldown between generations.
+
+## Player Viewer — `http://<host-ip>:8080/viewer.html`
+
+A minimal read-only page for players. Shows the current image and gallery.
+Automatically updates when a new image is generated — no refresh needed.
+Clicking a gallery thumbnail shows that image and its prompt.
+
+Use the QR codes on the DM screen to navigate players to the correct URL.
 
 ## Commands
 
 ```bash
-dnd-atmo run           # check setup and start (detached)
-dnd-atmo stop          # stop containers
-dnd-atmo logs          # tail container logs
-dnd-atmo model medium  # download/replace Whisper model (tiny/base/small/medium/large)
+./dnd-atmo run           # check setup and start
+./dnd-atmo stop          # stop containers
+./dnd-atmo restart       # rebuild and restart (picks up code changes)
+./dnd-atmo logs          # tail container logs
+./dnd-atmo model medium  # download/replace Whisper model (tiny/base/small/medium/large)
 ```
 
 ## Cost
 
-Images use the OpenAI dall-e-3 API (~$0.04 per image). Session and lifetime totals
-are displayed in the app and persisted in `data/costs.json`.
+Images use DALL-E 3 (~$0.04 per image). Session and lifetime totals are shown in the DM
+interface and persisted in `data/costs.json`.
+
+## Data
+
+```
+public/sessions/YYYY-MM-DD/image_NN.png   — generated images
+public/sessions/YYYY-MM-DD/image_NN.txt   — prompt used for each image
+data/costs.json                           — lifetime and session cost tracking
+models/ggml-model.bin                     — whisper model (not in Docker image)
+```
