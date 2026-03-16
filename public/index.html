@@ -155,8 +155,54 @@
     #btn-start:hover:not(:disabled)  { background: #162016; border-color: #6aaa6a; }
     #btn-cancel { border-color: #5a4a4a; color: #c49a9a; font-size: 0.82rem; padding: 10px 18px; }
     #btn-cancel:hover:not(:disabled) { background: #1e1414; border-color: #8a6a6a; }
-    #btn-submit { border-color: #7a6a2a; color: #e8d070; letter-spacing: 0.12em; }
-    #btn-submit:hover:not(:disabled) { background: #221e08; border-color: #c0a030; }
+    #btn-submit, #btn-text-submit { border-color: #7a6a2a; color: #e8d070; letter-spacing: 0.12em; }
+    #btn-submit:hover:not(:disabled),
+    #btn-text-submit:hover:not(:disabled) { background: #221e08; border-color: #c0a030; }
+
+    /* ---- Mode toggle ---- */
+    #mode-toggle {
+      display: flex;
+      border: 1px solid #3a3020;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 6px 24px;
+      font-size: 0.75rem;
+      border: none;
+      border-radius: 0;
+      background: #111008;
+      color: #4a3f2a;
+      letter-spacing: 0.1em;
+    }
+    .mode-btn:hover:not(.active) { background: #191510; color: #9a8a6a; border-color: transparent; }
+    .mode-btn.active { background: #1f1a10; color: #e8d5a3; }
+
+    /* ---- Text mode controls ---- */
+    #text-controls {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 512px;
+      max-width: 100%;
+    }
+    #scene-input {
+      width: 100%;
+      height: 80px;
+      background: #141210;
+      border: 1px solid #3a3020;
+      color: #c9b99a;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 8px 10px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #scene-input:focus { outline: none; border-color: #6a5a3a; }
+    #scene-input::placeholder { color: #3a3020; }
 
     #timer {
       font-size: 2rem;
@@ -166,7 +212,6 @@
       text-align: center;
     }
     #timer.recording { color: #d46a6a; }
-    #timer.cooldown  { color: #6a8ad4; }
 
     /* ---- Step progress ---- */
     #step-progress {
@@ -369,6 +414,11 @@
   <span id="ind-key"   class="indicator checking"><span class="dot"></span>API key</span>
 </div>
 
+<div id="mode-toggle">
+  <button class="mode-btn active" id="btn-mode-voice">&#9679; Voice</button>
+  <button class="mode-btn"        id="btn-mode-text">&#10002; Type</button>
+</div>
+
 <div id="step-progress">
   <span id="step-transcribe" class="step"><span class="dot"></span>Transcribing</span>
   <span class="step-sep">→</span>
@@ -380,6 +430,11 @@
   <button id="btn-cancel" style="display:none">&#10005; I Changed My Mind</button>
   <span id="timer">5:00</span>
   <button id="btn-submit" style="display:none">&#10024; Do The Magic</button>
+</div>
+
+<div id="text-controls">
+  <textarea id="scene-input" placeholder="Describe the scene..."></textarea>
+  <button id="btn-text-submit" disabled>&#10024; Do The Magic</button>
 </div>
 
 <div id="status">Checking prerequisites...</div>
@@ -412,19 +467,17 @@
 // State
 // ============================================================
 const MAX_RECORD_MS = 5 * 60 * 1000;
-const COOLDOWN_SEC  = 30;
 
 let mediaRecorder  = null;
 let audioChunks    = [];
 let recordingTimer = null;
 let countdownTimer = null;
-let cooldownLeft   = 0;
-let cooldownTimer2 = null;
 let isGenerating   = false;
 
 // Readiness flags — all must be true before Record is enabled
 const ready = { mic: false, model: false, apiKey: false };
-let micBlocked = false; // true only when mic is explicitly denied or unavailable
+let micBlocked  = false; // true only when mic is explicitly denied or unavailable
+let currentMode = 'voice';
 
 // ============================================================
 // DOM refs
@@ -453,6 +506,11 @@ const transcriptionBox = document.getElementById('transcription-box');
 const transcriptionTxt = document.getElementById('transcription-text');
 const promptDisplay    = document.getElementById('prompt-display');
 const promptTxt        = document.getElementById('prompt-text');
+const btnModeVoice     = document.getElementById('btn-mode-voice');
+const btnModeText      = document.getElementById('btn-mode-text');
+const textControls     = document.getElementById('text-controls');
+const sceneInput       = document.getElementById('scene-input');
+const btnTextSubmit    = document.getElementById('btn-text-submit');
 
 // ============================================================
 // Pre-flight checks (run on load)
@@ -635,7 +693,6 @@ async function startRecording() {
   btnCancel.style.display = '';
   btnSubmit.style.display = '';
   timerEl.classList.add('recording');
-  timerEl.classList.remove('cooldown');
   startCountdown(MAX_RECORD_MS / 1000);
 
   recordingTimer = setTimeout(() => {
@@ -768,7 +825,93 @@ async function handleRecordingComplete() {
   ];
   setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
   isGenerating = false;
-  startCooldown();
+  updateTimerDisplay(MAX_RECORD_MS / 1000);
+  resetUI();
+}
+
+// ============================================================
+// Mode toggle
+// ============================================================
+btnModeVoice.addEventListener('click', () => switchMode('voice'));
+btnModeText.addEventListener('click',  () => switchMode('text'));
+
+function switchMode(mode) {
+  currentMode = mode;
+  btnModeVoice.classList.toggle('active', mode === 'voice');
+  btnModeText.classList.toggle('active',  mode === 'text');
+  document.getElementById('controls').style.display = mode === 'voice' ? 'flex'  : 'none';
+  textControls.style.display = mode === 'text'  ? 'flex'  : 'none';
+  indMic.style.display       = mode === 'text'  ? 'none'  : '';
+  btnGrantMic.style.display  = mode === 'text'  ? 'none'  : (micBlocked ? '' : 'none');
+  if (mode === 'voice') transcriptionBox.style.display = 'none';
+  updateStartButton();
+  updateTextButton();
+}
+
+function updateTextButton() {
+  const hasText = sceneInput.value.trim().length > 0;
+  btnTextSubmit.disabled = !ready.apiKey || isGenerating || !hasText;
+}
+
+sceneInput.addEventListener('input', updateTextButton);
+
+// ============================================================
+// Text mode submit
+// ============================================================
+btnTextSubmit.addEventListener('click', handleTextSubmit);
+
+async function handleTextSubmit() {
+  const sceneText  = sceneInput.value.trim();
+  const basePrompt = basePromptEl.value.trim();
+  const finalPrompt = basePrompt + (sceneText ? '\n\n' + sceneText : '');
+
+  isGenerating = true;
+  updateTextButton();
+
+  // Show only the generate step
+  stepProgress.style.display   = 'flex';
+  stepTranscribe.style.display = 'none';
+  stepGenerate.className       = 'step active';
+  setStatus('Generating image...');
+
+  const fd = new FormData();
+  fd.append('action',       'generate');
+  fd.append('final_prompt', finalPrompt);
+
+  let genResult;
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    genResult = await resp.json();
+    if (!resp.ok) throw new Error(genResult.error ?? `HTTP ${resp.status}`);
+  } catch (err) {
+    hideSteps();
+    setStatus('Image generation error: ' + err.message, true);
+    isGenerating = false;
+    updateTextButton();
+    return;
+  }
+
+  hideSteps();
+  displayImage(genResult.image_url, finalPrompt);
+
+  costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
+  costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
+  costLifetime.textContent = '$' + genResult.cost_lifetime.toFixed(3);
+
+  const epicLines = [
+    'The vision takes shape... let it wash over you.',
+    'The realm reveals itself. Breathe it in.',
+    'The mists part. What do you see?',
+    'Reality bends to your words.',
+    'The scene is set. The dice await.',
+    'Your world, rendered. Take a moment.',
+    'The veil lifts. Behold.',
+    'The arcane mirrors reflect your vision.',
+  ];
+  setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+
+  isGenerating = false;
+  resetUI();
 }
 
 // ============================================================
@@ -786,9 +929,10 @@ function showSteps(activeStep) {
 }
 
 function hideSteps() {
-  stepProgress.style.display = 'none';
-  stepTranscribe.className   = 'step';
-  stepGenerate.className     = 'step';
+  stepProgress.style.display   = 'none';
+  stepTranscribe.style.display = '';
+  stepTranscribe.className     = 'step';
+  stepGenerate.className       = 'step';
 }
 
 // ============================================================
@@ -902,45 +1046,30 @@ async function loadGallery() {
   }
 }
 
-// ============================================================
-// Cooldown
-// ============================================================
-function startCooldown() {
-  cooldownLeft = COOLDOWN_SEC;
-  timerEl.classList.add('cooldown');
-  updateTimerDisplay(cooldownLeft);
-  cooldownTimer2 = setInterval(() => {
-    cooldownLeft--;
-    updateTimerDisplay(cooldownLeft);
-    if (cooldownLeft <= 0) {
-      clearInterval(cooldownTimer2);
-      timerEl.classList.remove('cooldown');
-      updateTimerDisplay(5 * 60);
-      setStatus('');
-      resetUI();
-    }
-  }, 1000);
-}
 
 function resetUI() {
   btnCancel.style.display = 'none';
   btnSubmit.style.display = 'none';
-  btnStart.style.display  = '';
+  if (currentMode === 'voice') btnStart.style.display = '';
   updateStartButton();
+  updateTextButton();
 }
 
 function updateStartButton() {
   const micOk    = ready.mic || !micBlocked;
   const allReady = micOk && ready.model && ready.apiKey;
-  btnStart.disabled = !allReady || isGenerating || cooldownLeft > 0;
+  btnStart.disabled = !allReady || isGenerating;
+  // mode buttons disabled during recording/generation
+  btnModeVoice.disabled = isGenerating || btnCancel.style.display !== 'none';
+  btnModeText.disabled  = isGenerating || btnCancel.style.display !== 'none';
 
-  if (!allReady && !isGenerating && cooldownLeft === 0) {
+  if (!allReady && !isGenerating) {
     const missing = [];
     if (!micOk)        missing.push('microphone');
     if (!ready.model)  missing.push('whisper model');
     if (!ready.apiKey) missing.push('API key');
     setStatus('Not ready: ' + missing.join(', ') + '.', true);
-  } else if (allReady && !isGenerating && cooldownLeft === 0) {
+  } else if (allReady && !isGenerating) {
     setStatus('');
   }
 }
