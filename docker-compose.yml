@@ -1,0 +1,12 @@
+services:
+  dnd-atmo:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./public/sessions:/app/public/sessions
+      - ./models:/app/models
+      - ./data:/app/data
+    restart: unless-stopped

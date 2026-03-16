@@ -1,0 +1,6 @@
+.env
+.claude
+.idea
+data/costs.json
+public/sessions/
+models/

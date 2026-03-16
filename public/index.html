@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DnD Atmosphere Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0f;
+      color: #c9b99a;
+      font-family: 'Georgia', serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      letter-spacing: 0.15em;
+      color: #e8d5a3;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      opacity: 0.85;
+    }
+
+    /* ---- Main image display ---- */
+    #image-frame {
+      position: relative;
+      width: 512px;
+      max-width: 100%;
+      aspect-ratio: 1;
+      background: #1a1710;
+      border: 1px solid #3a3020;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    #current-image, #prev-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #current-image { opacity: 0; transition: opacity 1.2s ease; z-index: 2; }
+    #current-image.visible { opacity: 1; }
+    #prev-image    { opacity: 0.25; z-index: 1; }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #4a3f2a;
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      z-index: 0;
+    }
+
+    /* ---- Readiness indicators ---- */
+    #readiness {
+      width: 512px;
+      max-width: 100%;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 12px;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+    }
+
+    .indicator { display: flex; align-items: center; gap: 6px; }
+    .indicator .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+      background: #4a4030; /* checking */
+      transition: background 0.3s;
+    }
+    .indicator.ready  .dot { background: #5aaa5a; }
+    .indicator.error  .dot { background: #aa4a4a; }
+    .indicator.checking .dot {
+      background: #7a6a3a;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .indicator.ready  { color: #6a9a6a; }
+    .indicator.error  { color: #9a5a5a; }
+    .indicator.checking { color: #7a6a4a; }
+
+    /* ---- Controls ---- */
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 10px 28px;
+      font-family: inherit;
+      font-size: 1rem;
+      border: 1px solid #5a4a2a;
+      background: #1f1a10;
+      color: #e8d5a3;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    button:hover:not(:disabled) { background: #2e2510; border-color: #9a7a3a; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    #btn-start { border-color: #4a7a4a; color: #a8d4a8; }
+    #btn-start:hover:not(:disabled) { background: #162016; border-color: #6aaa6a; }
+    #btn-stop  { border-color: #7a3a3a; color: #d4a8a8; }
+    #btn-stop:hover:not(:disabled)  { background: #201616; border-color: #aa6a6a; }
+
+    #timer {
+      font-size: 2rem;
+      font-variant-numeric: tabular-nums;
+      color: #e8d5a3;
+      min-width: 60px;
+      text-align: center;
+    }
+    #timer.recording { color: #d46a6a; }
+    #timer.cooldown  { color: #6a8ad4; }
+
+    /* ---- Status ---- */
+    #status {
+      min-height: 1.4em;
+      font-size: 0.85rem;
+      color: #9a8a6a;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    #status.error { color: #d46a6a; }
+
+    /* ---- Prompt ---- */
+    #prompt-area {
+      width: 512px;
+      max-width: 100%;
+      margin-bottom: 16px;
+    }
+    #prompt-area label {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a6a4a;
+      margin-bottom: 6px;
+    }
+    #base-prompt {
+      width: 100%;
+      height: 72px;
+      background: #141210;
+      border: 1px solid #3a3020;
+      color: #c9b99a;
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 8px 10px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #base-prompt:focus { outline: none; border-color: #6a5a3a; }
+
+    /* ---- Cost display ---- */
+    #cost-bar {
+      width: 512px;
+      max-width: 100%;
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      font-size: 0.8rem;
+      color: #6a6050;
+      margin-bottom: 16px;
+    }
+    #cost-bar span { letter-spacing: 0.05em; }
+    #cost-bar b { color: #9a8a5a; }
+
+    /* ---- Gallery ---- */
+    #gallery-label {
+      width: 512px;
+      max-width: 100%;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 8px;
+    }
+
+    #gallery {
+      width: 512px;
+      max-width: 100%;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border: 1px solid #2a2518;
+      cursor: pointer;
+      opacity: 0.65;
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+  </style>
+</head>
+<body>
+
+<h1>DnD Atmosphere</h1>
+
+<div id="image-frame">
+  <div id="placeholder">Awaiting vision...</div>
+  <img id="prev-image" src="" alt="">
+  <img id="current-image" src="" alt="">
+</div>
+
+<div id="readiness">
+  <span id="ind-mic"   class="indicator checking"><span class="dot"></span>Microphone</span>
+  <span id="ind-model" class="indicator checking"><span class="dot"></span>Whisper model</span>
+  <span id="ind-key"   class="indicator checking"><span class="dot"></span>API key</span>
+</div>
+
+<div id="controls">
+  <button id="btn-start" disabled>&#9679; Record</button>
+  <span id="timer">5:00</span>
+  <button id="btn-stop" disabled>&#9632; Stop</button>
+</div>
+
+<div id="status">Checking prerequisites...</div>
+
+<div id="prompt-area">
+  <label>Base Style Prompt</label>
+  <textarea id="base-prompt" spellcheck="false">fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting, dark fantasy</textarea>
+</div>
+
+<div id="cost-bar">
+  <span>Image: <b id="cost-image">—</b></span>
+  <span>Session: <b id="cost-session">$0.000</b></span>
+  <span>Lifetime: <b id="cost-lifetime">$0.000</b></span>
+</div>
+
+<div id="gallery-label">Session Gallery</div>
+<div id="gallery"></div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+const MAX_RECORD_MS = 5 * 60 * 1000;
+const COOLDOWN_SEC  = 30;
+
+let mediaRecorder  = null;
+let audioChunks    = [];
+let recordingTimer = null;
+let countdownTimer = null;
+let cooldownLeft   = 0;
+let cooldownTimer2 = null;
+let isGenerating   = false;
+
+// Readiness flags — all must be true before Record is enabled
+const ready = { mic: false, model: false, apiKey: false };
+
+// ============================================================
+// DOM refs
+// ============================================================
+const btnStart     = document.getElementById('btn-start');
+const btnStop      = document.getElementById('btn-stop');
+const timerEl      = document.getElementById('timer');
+const statusEl     = document.getElementById('status');
+const currentImg   = document.getElementById('current-image');
+const prevImg      = document.getElementById('prev-image');
+const placeholder  = document.getElementById('placeholder');
+const gallery      = document.getElementById('gallery');
+const basePromptEl = document.getElementById('base-prompt');
+const costImage    = document.getElementById('cost-image');
+const costSession  = document.getElementById('cost-session');
+const costLifetime = document.getElementById('cost-lifetime');
+const indMic       = document.getElementById('ind-mic');
+const indModel     = document.getElementById('ind-model');
+const indKey       = document.getElementById('ind-key');
+
+// ============================================================
+// Pre-flight checks (run on load)
+// ============================================================
+async function preflight() {
+  await Promise.all([checkBackendStatus(), checkMicPermission()]);
+}
+
+async function checkBackendStatus() {
+  try {
+    const resp = await fetch('/api.php?action=status');
+    const data = await resp.json();
+
+    setIndicator(indModel, data.model_ready, 'Model ready', 'Model not found — run: dnd model');
+    ready.model = data.model_ready;
+
+    setIndicator(indKey, data.api_key_set, 'API key set', 'OPENAI_API_KEY missing');
+    ready.apiKey = data.api_key_set;
+
+    if (data.session_cost)  costSession.textContent  = '$' + data.session_cost.toFixed(3);
+    if (data.lifetime_cost) costLifetime.textContent = '$' + data.lifetime_cost.toFixed(3);
+  } catch (e) {
+    setIndicator(indModel, false, '', 'Backend unreachable');
+    setIndicator(indKey,   false, '', 'Backend unreachable');
+  }
+  updateStartButton();
+}
+
+async function checkMicPermission() {
+  // Try the Permissions API first (non-prompting)
+  if (navigator.permissions) {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' });
+      applyMicPermission(result.state);
+      result.onchange = () => applyMicPermission(result.state);
+      return;
+    } catch (_) { /* browser doesn't support mic query — fall through */ }
+  }
+
+  // Fall back: assume not granted, let the click request it
+  setIndicator(indMic, null, '', 'Click Record to grant access');
+  ready.mic = false;
+  updateStartButton();
+}
+
+function applyMicPermission(state) {
+  if (state === 'granted') {
+    setIndicator(indMic, true, 'Microphone ready');
+    ready.mic = true;
+  } else if (state === 'denied') {
+    setIndicator(indMic, false, '', 'Microphone blocked — allow in browser settings');
+    ready.mic = false;
+  } else {
+    // 'prompt' — we don't know yet; keep disabled, show hint
+    setIndicator(indMic, null, '', 'Microphone not yet granted');
+    ready.mic = false;
+  }
+  updateStartButton();
+}
+
+// ============================================================
+// Indicator helper
+// ============================================================
+function setIndicator(el, state, okLabel, errLabel = '') {
+  el.className = 'indicator ' + (state === true ? 'ready' : state === false ? 'error' : 'checking');
+  const label = state === true ? okLabel : (errLabel || okLabel);
+  el.innerHTML = '<span class="dot"></span>' + label;
+}
+
+// ============================================================
+// Recording
+// ============================================================
+btnStart.addEventListener('click', startRecording);
+btnStop.addEventListener('click',  stopRecording);
+
+async function startRecording() {
+  // If mic state was 'prompt', request it now
+  if (!ready.mic) {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop()); // just for permission
+      ready.mic = true;
+      setIndicator(indMic, true, 'Microphone ready');
+      updateStartButton();
+    } catch (e) {
+      setIndicator(indMic, false, '', 'Microphone blocked — allow in browser settings');
+      ready.mic = false;
+      updateStartButton();
+      return;
+    }
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    setIndicator(indMic, false, '', 'Microphone access lost');
+    ready.mic = false;
+    updateStartButton();
+    return;
+  }
+
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+  mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) audioChunks.push(e.data);
+  };
+  mediaRecorder.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    handleRecordingComplete();
+  };
+  mediaRecorder.start(1000);
+
+  btnStart.disabled = true;
+  btnStop.disabled  = false;
+  timerEl.classList.add('recording');
+  timerEl.classList.remove('cooldown');
+  startCountdown(MAX_RECORD_MS / 1000);
+
+  recordingTimer = setTimeout(() => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      setStatus('5-minute limit reached — stopping.');
+      stopRecording();
+    }
+  }, MAX_RECORD_MS);
+}
+
+function stopRecording() {
+  clearTimeout(recordingTimer);
+  clearInterval(countdownTimer);
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  btnStop.disabled = true;
+  timerEl.classList.remove('recording');
+}
+
+function startCountdown(totalSeconds) {
+  let remaining = totalSeconds;
+  updateTimerDisplay(remaining);
+  countdownTimer = setInterval(() => {
+    remaining--;
+    updateTimerDisplay(remaining);
+    if (remaining <= 0) clearInterval(countdownTimer);
+  }, 1000);
+}
+
+function updateTimerDisplay(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  timerEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ============================================================
+// After recording: send to backend
+// ============================================================
+async function handleRecordingComplete() {
+  if (audioChunks.length === 0) {
+    setStatus('No audio captured.', true);
+    resetUI();
+    return;
+  }
+
+  setStatus('Transcribing & generating image...');
+  isGenerating = true;
+
+  const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+  const formData = new FormData();
+  formData.append('audio', blob, 'recording.webm');
+  formData.append('base_prompt', basePromptEl.value.trim());
+
+  let result;
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: formData });
+    result = await resp.json();
+    if (!resp.ok) throw new Error(result.error ?? `HTTP ${resp.status}`);
+  } catch (err) {
+    setStatus('Error: ' + err.message, true);
+    isGenerating = false;
+    resetUI();
+    return;
+  }
+
+  displayImage(result.image_url);
+
+  costImage.textContent    = '$' + result.cost_image.toFixed(3);
+  costSession.textContent  = '$' + result.cost_session.toFixed(3);
+  costLifetime.textContent = '$' + result.cost_lifetime.toFixed(3);
+
+  const note = result.transcription
+    ? `Done. Transcription: "${result.transcription.substring(0, 60)}${result.transcription.length > 60 ? '…' : ''}"`
+    : 'Done.';
+  setStatus(note);
+
+  isGenerating = false;
+  startCooldown();
+}
+
+// ============================================================
+// Image display with fade
+// ============================================================
+function displayImage(url) {
+  placeholder.style.display = 'none';
+  if (currentImg.src && !currentImg.src.endsWith('undefined')) prevImg.src = currentImg.src;
+  currentImg.classList.remove('visible');
+  currentImg.src = url;
+  currentImg.onload = () => currentImg.classList.add('visible');
+  addThumb(url);
+}
+
+function addThumb(url) {
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'thumb active';
+  img.title = url;
+  img.addEventListener('click', () => {
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    img.classList.add('active');
+    prevImg.src = currentImg.src;
+    currentImg.classList.remove('visible');
+    currentImg.src = url;
+    currentImg.onload = () => currentImg.classList.add('visible');
+  });
+  document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+  gallery.appendChild(img);
+}
+
+// ============================================================
+// Cooldown
+// ============================================================
+function startCooldown() {
+  cooldownLeft = COOLDOWN_SEC;
+  timerEl.classList.add('cooldown');
+  updateTimerDisplay(cooldownLeft);
+  cooldownTimer2 = setInterval(() => {
+    cooldownLeft--;
+    updateTimerDisplay(cooldownLeft);
+    if (cooldownLeft <= 0) {
+      clearInterval(cooldownTimer2);
+      timerEl.classList.remove('cooldown');
+      updateTimerDisplay(5 * 60);
+      resetUI();
+    }
+  }, 1000);
+}
+
+function resetUI() {
+  btnStop.disabled = true;
+  updateStartButton();
+}
+
+function updateStartButton() {
+  const allReady = ready.mic && ready.model && ready.apiKey;
+  btnStart.disabled = !allReady || isGenerating || cooldownLeft > 0;
+
+  if (!allReady && !isGenerating && cooldownLeft === 0) {
+    const missing = [];
+    if (!ready.mic)    missing.push('microphone');
+    if (!ready.model)  missing.push('whisper model');
+    if (!ready.apiKey) missing.push('API key');
+    setStatus('Not ready: ' + missing.join(', ') + '.', true);
+  } else if (allReady && !isGenerating && cooldownLeft === 0) {
+    setStatus('Ready.');
+  }
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function setStatus(msg, isError = false) {
+  statusEl.textContent = msg;
+  statusEl.className = isError ? 'error' : '';
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+preflight();
+</script>
+</body>
+</html>
