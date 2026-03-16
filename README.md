@@ -1,6 +1,6 @@
 # DnD Atmosphere Generator
 
-Speak a scene description in Czech → it gets transcribed → a atmospheric image is generated.
+Describe a scene by voice or text → it gets transcribed and turned into an atmospheric image.
 Built for DnD sessions: the DM generates images, players see them live on their own devices.
 
 ## Requirements
@@ -20,10 +20,10 @@ cp .env.example .env
 
 **2. Download a Whisper model**
 
-Whisper converts your spoken Czech into text. Pick a model based on your hardware:
+Whisper converts your spoken description into text. Pick a model based on your hardware:
 
-| Model | Size | Czech quality | Transcription time (CPU) |
-|-------|------|---------------|--------------------------|
+| Model | Size | Quality | Transcription time (CPU) |
+|-------|------|---------|--------------------------|
 | `tiny` | 75 MB | poor | ~5s |
 | `base` | 142 MB | mediocre | ~10s |
 | `small` | 466 MB | decent | ~30s |
@@ -42,31 +42,51 @@ Whisper converts your spoken Czech into text. Pick a model based on your hardwar
 
 First start takes several minutes (compiles whisper.cpp from source). Subsequent starts are instant.
 
-## DM Interface — `localhost:8080`
+## Pages
 
-Open this on the machine running the app.
+| URL | Who uses it |
+|-----|-------------|
+| `http://localhost:8080` | Homepage — QR codes and links to both interfaces |
+| `http://localhost:8080/dm.html` | DM interface |
+| `http://<host-ip>:8080/player.html` | Player viewer (any device on the LAN) |
 
-1. Set the **Base Style Prompt** to define the visual style for your session
-2. Click **Start Listen** and describe the current scene in Czech
-3. Click **Do The Magic** to submit — or **I Changed My Mind** to cancel
-4. The transcription appears while the image generates so you can verify what was heard
-5. The image fades in; all session images are kept in the gallery strip below
+The homepage auto-detects your LAN IP and shows ready-to-scan QR codes for both the DM and player pages.
 
-**Gallery management:** hover any thumbnail to reveal a `×` delete button.
-Delete is only available from `localhost` — players cannot delete images.
+## DM Interface
 
-**QR codes:** a "Show player QR codes" toggle appears below the title once the app is running.
-Scan one to open the player viewer on any device on the same network.
+Three tabs: **Generate**, **Upload**, **Gallery**.
 
-There is a 30-second cooldown between generations.
+### Generate tab
 
-## Player Viewer — `http://<host-ip>:8080/viewer.html`
+Two input modes:
 
-A minimal read-only page for players. Shows the current image and gallery.
-Automatically updates when a new image is generated — no refresh needed.
-Clicking a gallery thumbnail shows that image and its prompt.
+- **Voice** — click **Start Listen**, describe the scene out loud, then **Do The Magic** to submit (or **I Changed My Mind** to discard). The transcription is shown so you can verify what was heard.
+- **Type** — type a scene description directly and click **Do The Magic**.
 
-Use the QR codes on the DM screen to navigate players to the correct URL.
+Both modes use the **Base Style Prompt** to define the consistent visual style for your session (e.g. art style, mood, colour palette). The scene description is appended to it when generating.
+
+Use **Image Size** to switch between square, landscape, and portrait before generating.
+
+Check **Hide from players** before submitting to generate an image privately — it will not appear on the player page until you reveal it.
+
+### Upload tab
+
+Upload one or more images from disk to add them to the gallery without generating. Supports drag-and-drop. Accepts an optional description. The **Hide from players** checkbox works here too.
+
+### Gallery tab
+
+Shows all session images as a scrollable carousel. Click a thumbnail to preview it in the large frame below. Hover a thumbnail to reveal:
+
+- **◎ / ●** — toggle visibility for players (filled dot = hidden)
+- **×** — delete the image permanently
+
+Delete and hide/show controls are only available from `localhost` — players cannot modify the gallery.
+
+## Player Viewer
+
+A minimal read-only page. Shows the current image full-width with a scrollable carousel above.
+Updates automatically every 5 seconds — no refresh needed.
+Clicking any carousel thumbnail switches the main image. Clicking the main image opens it full-size.
 
 ## Commands
 
@@ -80,16 +100,16 @@ Use the QR codes on the DM screen to navigate players to the correct URL.
 
 ## Cost
 
-Images use DALL-E 3 (~$0.04 per image). Session and lifetime totals are shown in the DM
-interface and persisted in `data/costs.json`.
+Images use DALL-E 3 (~$0.04 per image). Cost per image, session total, and lifetime total are shown in the footer of the DM interface and persisted in `data/costs.json`.
 
 ## Data
 
 ```
-public/sessions/YYYY-MM-DD/image_NN.png   — generated images
-public/sessions/YYYY-MM-DD/image_NN.txt   — prompt used for each image
-data/costs.json                           — lifetime and session cost tracking
-models/ggml-model.bin                     — whisper model (not in Docker image)
+public/sessions/YYYY-MM-DD/image_NN.png      — generated/uploaded images
+public/sessions/YYYY-MM-DD/image_NN.txt      — prompt used for each image
+public/sessions/YYYY-MM-DD/image_NN.hidden   — sidecar: marks image as hidden from players
+data/costs.json                              — lifetime and session cost tracking
+models/ggml-model.bin                        — whisper model (not bundled in Docker image)
 ```
 
 ## Examples
