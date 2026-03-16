@@ -1,6 +1,6 @@
 # DnD Atmosphere Generator
 
-Speak a scene description in Any Language you like → it gets transcribed → a atmospheric image is generated.
+Speak a scene description in Czech → it gets transcribed → a atmospheric image is generated.
 Built for DnD sessions: the DM generates images, players see them live on their own devices.
 
 ## Requirements

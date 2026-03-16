@@ -304,10 +304,18 @@
       font-size: 0.85rem;
       color: #9a8a6a;
       letter-spacing: 0.06em;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
       text-align: center;
     }
     #status.error { color: #d46a6a; }
+    #timing {
+      min-height: 1.2em;
+      font-size: 0.72rem;
+      color: #6a5a40;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      text-align: center;
+    }
 
     /* ---- Prompt ---- */
     #prompt-area {
@@ -511,7 +519,7 @@
 <div id="controls">
   <button id="btn-start" disabled>&#9679; Start Listen</button>
   <button id="btn-cancel" style="display:none">&#10005; I Changed My Mind</button>
-  <span id="timer">5:00</span>
+  <span id="timer" style="visibility:hidden">0:00</span>
   <button id="btn-submit" style="display:none">&#10024; Do The Magic</button>
 </div>
 
@@ -530,6 +538,7 @@
 </div>
 
 <div id="status">Checking prerequisites...</div>
+<div id="timing"></div>
 
 <div id="transcription-box">
   <label>Heard</label>
@@ -564,12 +573,10 @@
 // ============================================================
 // State
 // ============================================================
-const MAX_RECORD_MS = 5 * 60 * 1000;
-
 let mediaRecorder  = null;
 let audioChunks    = [];
-let recordingTimer = null;
-let countdownTimer = null;
+let elapsed        = 0;
+let elapsedTimer   = null;
 let isGenerating   = false;
 
 // Readiness flags — all must be true before Record is enabled
@@ -605,6 +612,7 @@ const transcriptionBox = document.getElementById('transcription-box');
 const transcriptionTxt = document.getElementById('transcription-text');
 const promptDisplay    = document.getElementById('prompt-display');
 const promptTxt        = document.getElementById('prompt-text');
+const timingEl         = document.getElementById('timing');
 const btnModeVoice     = document.getElementById('btn-mode-voice');
 const btnModeText      = document.getElementById('btn-mode-text');
 const btnModeUpload    = document.getElementById('btn-mode-upload');
@@ -774,45 +782,41 @@ async function startRecording() {
   btnStart.style.display  = 'none';
   btnCancel.style.display = '';
   btnSubmit.style.display = '';
+  timerEl.style.visibility = 'visible';
   timerEl.classList.add('recording');
-  startCountdown(MAX_RECORD_MS / 1000);
-
-  recordingTimer = setTimeout(() => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      setStatus('5-minute limit reached — submitting.');
-      submitRecording();
-    }
-  }, MAX_RECORD_MS);
+  startElapsed();
 }
 
 function cancelRecording() {
   cancelPending = true;
-  clearTimeout(recordingTimer);
-  clearInterval(countdownTimer);
+  stopElapsed();
   if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
   timerEl.classList.remove('recording');
-  updateTimerDisplay(MAX_RECORD_MS / 1000);
+  timerEl.style.visibility = 'hidden';
   setStatus('');
 }
 
 function submitRecording() {
-  clearTimeout(recordingTimer);
-  clearInterval(countdownTimer);
+  stopElapsed();
   if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-  // Hide all buttons while processing — resetUI will restore them when done
-  btnCancel.style.display = 'none';
-  btnSubmit.style.display = 'none';
+  btnCancel.style.display  = 'none';
+  btnSubmit.style.display  = 'none';
   timerEl.classList.remove('recording');
+  timerEl.style.visibility = 'hidden';
 }
 
-function startCountdown(totalSeconds) {
-  let remaining = totalSeconds;
-  updateTimerDisplay(remaining);
-  countdownTimer = setInterval(() => {
-    remaining--;
-    updateTimerDisplay(remaining);
-    if (remaining <= 0) clearInterval(countdownTimer);
+function startElapsed() {
+  elapsed = 0;
+  updateTimerDisplay(0);
+  elapsedTimer = setInterval(() => {
+    elapsed++;
+    updateTimerDisplay(elapsed);
   }, 1000);
+}
+
+function stopElapsed() {
+  clearInterval(elapsedTimer);
+  elapsedTimer = null;
 }
 
 function updateTimerDisplay(seconds) {
@@ -832,12 +836,15 @@ async function handleRecordingComplete() {
   }
 
   isGenerating = true;
+  timingEl.textContent = '';
   transcriptionBox.style.display = 'none';
   transcriptionTxt.textContent   = '';
 
   // ── Step 1: Transcribe ──────────────────────────────────
   showSteps('transcribe');
   setStatus('Transcribing speech...');
+  const t0 = Date.now();
+  const liveTimer = startLiveTiming(t0, sec => `Transcribing... ${sec}s`);
 
   const blob     = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
   const formData = new FormData();
@@ -851,12 +858,16 @@ async function handleRecordingComplete() {
     transcribeResult = await resp.json();
     if (!resp.ok) throw new Error(transcribeResult.error ?? `HTTP ${resp.status}`);
   } catch (err) {
+    clearInterval(liveTimer);
     hideSteps();
     setStatus('Transcription error: ' + err.message, true);
     isGenerating = false;
     resetUI();
     return;
   }
+
+  clearInterval(liveTimer);
+  const t1 = Date.now();
 
   // Show transcription result
   if (transcribeResult.transcription) {
@@ -870,6 +881,8 @@ async function handleRecordingComplete() {
   // ── Step 2: Generate image ──────────────────────────────
   showSteps('generate');
   setStatus('Generating image...');
+  const transcribeSec = ((t1 - t0) / 1000).toFixed(1);
+  const liveTimer2 = startLiveTiming(t1, sec => `Transcribed in ${transcribeSec}s · Generating... ${sec}s`);
 
   const formData2 = new FormData();
   formData2.append('action',       'generate');
@@ -883,6 +896,7 @@ async function handleRecordingComplete() {
     genResult = await resp2.json();
     if (!resp2.ok) throw new Error(genResult.error ?? `HTTP ${resp2.status}`);
   } catch (err) {
+    clearInterval(liveTimer2);
     hideSteps();
     setStatus('Image generation error: ' + err.message, true);
     isGenerating = false;
@@ -890,6 +904,8 @@ async function handleRecordingComplete() {
     return;
   }
 
+  clearInterval(liveTimer2);
+  const t2 = Date.now();
   hideSteps();
   displayImage(genResult.image_url, genResult.prompt_used);
 
@@ -908,8 +924,8 @@ async function handleRecordingComplete() {
     'The arcane mirrors reflect your vision.',
   ];
   setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+  timingEl.textContent = `Transcribed in ${((t1 - t0) / 1000).toFixed(1)}s · Generated in ${((t2 - t1) / 1000).toFixed(1)}s`;
   isGenerating = false;
-  updateTimerDisplay(MAX_RECORD_MS / 1000);
   resetUI();
 }
 
@@ -1033,6 +1049,7 @@ async function handleTextSubmit() {
   const basePrompt = basePromptEl.value.trim();
 
   isGenerating = true;
+  timingEl.textContent = '';
   updateTextButton();
 
   // Show only the generate step
@@ -1040,6 +1057,8 @@ async function handleTextSubmit() {
   stepTranscribe.style.display = 'none';
   stepGenerate.className       = 'step active';
   setStatus('Generating image...');
+  const tGen0 = Date.now();
+  const liveTimerText = startLiveTiming(tGen0, sec => `Generating... ${sec}s`);
 
   const fd = new FormData();
   fd.append('action',      'generate');
@@ -1053,6 +1072,7 @@ async function handleTextSubmit() {
     genResult = await resp.json();
     if (!resp.ok) throw new Error(genResult.error ?? `HTTP ${resp.status}`);
   } catch (err) {
+    clearInterval(liveTimerText);
     hideSteps();
     setStatus('Image generation error: ' + err.message, true);
     isGenerating = false;
@@ -1060,6 +1080,8 @@ async function handleTextSubmit() {
     return;
   }
 
+  clearInterval(liveTimerText);
+  const tGen1 = Date.now();
   hideSteps();
   displayImage(genResult.image_url, genResult.prompt_used);
 
@@ -1078,6 +1100,7 @@ async function handleTextSubmit() {
     'The arcane mirrors reflect your vision.',
   ];
   setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+  timingEl.textContent = `Generated in ${((tGen1 - tGen0) / 1000).toFixed(1)}s`;
 
   isGenerating = false;
   resetUI();
@@ -1287,6 +1310,13 @@ function updateStartButton() {
 // ============================================================
 // Helpers
 // ============================================================
+function startLiveTiming(startMs, labelFn) {
+  timingEl.textContent = labelFn(0);
+  return setInterval(() => {
+    timingEl.textContent = labelFn(Math.floor((Date.now() - startMs) / 1000));
+  }, 1000);
+}
+
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
   statusEl.className = isError ? 'error' : '';
