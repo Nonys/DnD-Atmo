@@ -70,7 +70,7 @@
     }
 
     #current-image { opacity: 0; transition: opacity 1.2s ease; z-index: 2; }
-    #current-image.visible { opacity: 1; }
+    #current-image.visible { opacity: 1; cursor: zoom-in; }
     #prev-image    { opacity: 0.25; z-index: 1; }
 
     #placeholder {
@@ -1084,6 +1084,10 @@ function setStatus(msg, isError = false) {
   statusEl.className = isError ? 'error' : '';
 }
 
+currentImg.addEventListener('click', () => {
+  if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
+});
+
 // ── Base prompt persistence ───────────────────────────────────
 const PROMPT_KEY = 'dnd-atmo-base-prompt';
 const saved = localStorage.getItem(PROMPT_KEY);
@@ -1093,5 +1097,6 @@ basePromptEl.addEventListener('blur', () => localStorage.setItem(PROMPT_KEY, bas
 // ── Boot ─────────────────────────────────────────────────────
 preflight();
 </script>
+
 </body>
 </html>

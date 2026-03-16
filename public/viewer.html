@@ -47,7 +47,7 @@
     }
 
     #current-image { opacity: 0; transition: opacity 1.2s ease; z-index: 2; }
-    #current-image.visible { opacity: 1; }
+    #current-image.visible { opacity: 1; cursor: zoom-in; }
     #prev-image    { opacity: 0.25; z-index: 1; }
 
     #placeholder {
@@ -163,8 +163,8 @@ const newBadge     = document.getElementById('new-badge');
 const promptDisplay = document.getElementById('prompt-display');
 const promptTxt    = document.getElementById('prompt-text');
 
-let latestUrl = null;
-let badgeTimer = null;
+let latestUrl    = null;
+let badgeTimer   = null;
 
 async function fetchGallery() {
   try {
@@ -246,7 +246,12 @@ async function poll() {
 }
 
 init();
+currentImg.addEventListener('click', () => {
+  if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
+});
+
 setInterval(poll, 5000);
 </script>
+
 </body>
 </html>
