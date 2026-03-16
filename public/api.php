@@ -7,7 +7,7 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 define('WHISPER_BIN',        '/usr/local/bin/whisper-cli');
 define('WHISPER_MODEL',      '/app/models/ggml-model.bin');
 define('OPENAI_API_KEY',     (string) getenv('OPENAI_API_KEY'));
-define('IMAGE_COST_USD',     0.040);   // dall-e-3 standard 1024x1024
+// IMAGE_MODEL and IMAGE_QUALITY are read from env — see imageConfig() / imageCost()
 define('COSTS_FILE',         '/app/data/costs.json');
 define('SESSIONS_DIR',       __DIR__ . '/sessions');
 define('WHISPER_TIMEOUT_S',  120);     // seconds before transcription is killed
@@ -74,12 +74,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'status'
     } else {
         $ips = array_values(array_filter(explode(',', $raw)));
     }
+    $cfg = imageConfig();
     echo json_encode([
         'model_ready'   => file_exists(WHISPER_MODEL),
         'api_key_set'   => OPENAI_API_KEY !== '',
         'session_cost'  => $costs['session_cost']  ?? 0.0,
         'lifetime_cost' => $costs['lifetime_cost'] ?? 0.0,
         'server_ips'    => $ips,
+        'image_model'   => $cfg['model'],
+        'image_quality' => $cfg['quality'],
+        'image_sizes'   => $cfg['sizes'],
     ]);
     exit;
 }
@@ -173,7 +177,8 @@ if ($action === 'transcribe') {
 if ($action === 'generate') {
     $basePrompt = trim($_POST['base_prompt'] ?? '');
     $scene      = trim($_POST['scene']       ?? '');
-    $allowed    = ['1024x1024', '1792x1024', '1024x1792'];
+    $cfg        = imageConfig();
+    $allowed    = array_column($cfg['sizes'], 'value');
     $size       = in_array($_POST['size'] ?? '', $allowed) ? $_POST['size'] : '1024x1024';
 
     if ($basePrompt === '' && $scene === '') {
@@ -190,7 +195,7 @@ if ($action === 'generate') {
     $lastError = 'Unknown error';
 
     for ($attempt = 1; $attempt <= 3; $attempt++) {
-        $result = callOpenAI($finalPrompt, $size);
+        $result = callOpenAI($finalPrompt, $size, $cfg);
         if ($result['ok']) {
             $imageB64 = $result['b64'];
             break;
@@ -225,19 +230,20 @@ if ($action === 'generate') {
     }
 
     // Update costs
+    $costImage = imageCost($cfg['model'], $cfg['quality'], $size);
     $costs = loadCosts();
     if (($costs['session_date'] ?? '') !== $today) {
         $costs['session_cost'] = 0.0;
         $costs['session_date'] = $today;
     }
-    $costs['session_cost']  = round(($costs['session_cost']  ?? 0) + IMAGE_COST_USD, 4);
-    $costs['lifetime_cost'] = round(($costs['lifetime_cost'] ?? 0) + IMAGE_COST_USD, 4);
+    $costs['session_cost']  = round(($costs['session_cost']  ?? 0) + $costImage, 4);
+    $costs['lifetime_cost'] = round(($costs['lifetime_cost'] ?? 0) + $costImage, 4);
     saveCosts($costs);
 
     echo json_encode([
         'image_url'     => '/sessions/' . $today . '/' . $imageName . '.png',
         'prompt_used'   => $finalPrompt,
-        'cost_image'    => IMAGE_COST_USD,
+        'cost_image'    => $costImage,
         'cost_session'  => $costs['session_cost'],
         'cost_lifetime' => $costs['lifetime_cost'],
     ]);
@@ -417,25 +423,70 @@ function buildPrompt(string $style, string $scene): string
     return implode("\n\n", $parts);
 }
 
-function callOpenAI(string $prompt, string $size = '1024x1024'): array
+function imageConfig(): array
+{
+    $model   = trim((string) getenv('IMAGE_MODEL'))   ?: 'gpt-image-1';
+    $quality = trim((string) getenv('IMAGE_QUALITY')) ?: '';
+
+    if ($model === 'dall-e-3') {
+        if (!in_array($quality, ['standard', 'hd'])) $quality = 'standard';
+        return [
+            'model'   => 'dall-e-3',
+            'quality' => $quality,
+            'sizes'   => [
+                ['value' => '1024x1024', 'label' => 'Square 1:1'],
+                ['value' => '1792x1024', 'label' => 'Landscape 16:9'],
+                ['value' => '1024x1792', 'label' => 'Portrait 9:16'],
+            ],
+        ];
+    }
+
+    if (!in_array($quality, ['low', 'medium', 'high', 'auto'])) $quality = 'medium';
+    return [
+        'model'   => 'gpt-image-1',
+        'quality' => $quality,
+        'sizes'   => [
+            ['value' => '1024x1024', 'label' => 'Square 1:1'],
+            ['value' => '1536x1024', 'label' => 'Landscape 3:2'],
+            ['value' => '1024x1536', 'label' => 'Portrait 2:3'],
+        ],
+    ];
+}
+
+function imageCost(string $model, string $quality, string $size): float
+{
+    if ($model === 'dall-e-3') {
+        $hd = $quality === 'hd';
+        return ($size === '1024x1024') ? ($hd ? 0.080 : 0.040) : ($hd ? 0.120 : 0.080);
+    }
+    // gpt-image-1
+    return match ($quality) {
+        'low'   => 0.011,
+        'high'  => 0.167,
+        default => 0.042, // medium or auto
+    };
+}
+
+function callOpenAI(string $prompt, string $size, array $cfg): array
 {
     $apiKey = OPENAI_API_KEY;
     if ($apiKey === '') {
         return ['ok' => false, 'error' => 'OPENAI_API_KEY not set'];
     }
 
-    $payload = json_encode([
-        'model'           => 'dall-e-3',
-        'prompt'          => $prompt,
-        'n'               => 1,
-        'size'            => $size,
-        'response_format' => 'b64_json',
-    ]);
+    $payload = ['model' => $cfg['model'], 'prompt' => $prompt, 'n' => 1, 'size' => $size];
+
+    if ($cfg['model'] === 'dall-e-3') {
+        $payload['quality']         = $cfg['quality'];
+        $payload['response_format'] = 'b64_json';
+    } else {
+        $payload['quality'] = $cfg['quality'];
+    }
 
     $ch = curl_init('https://api.openai.com/v1/images/generations');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_POSTFIELDS     => json_encode($payload),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => OPENAI_TIMEOUT_S,
         CURLOPT_HTTPHEADER     => [

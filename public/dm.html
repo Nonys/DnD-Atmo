@@ -130,7 +130,7 @@
     }
     #scene-input {
       width: 100%;
-      height: 80px;
+      height: 240px;
       background: #141210;
       border: 1px solid #3a3020;
       color: #c9b99a;
@@ -299,7 +299,7 @@
     }
     #base-prompt {
       width: 100%;
-      height: 72px;
+      height: 400px;
       background: #141210;
       border: 1px solid #3a3020;
       color: #c9b99a;
@@ -543,8 +543,8 @@
   <div id="size-label">Image Size</div>
   <div id="size-toggle">
     <button class="size-btn active" data-size="1024x1024">Square 1:1</button>
-    <button class="size-btn"        data-size="1792x1024">Landscape 16:9</button>
-    <button class="size-btn"        data-size="1024x1792">Portrait 9:16</button>
+    <button class="size-btn"        data-size="1536x1024">Landscape 3:2</button>
+    <button class="size-btn"        data-size="1024x1536">Portrait 2:3</button>
   </div>
 </div>
 
@@ -710,6 +710,8 @@ async function checkBackendStatus() {
 
     if (data.session_cost)  costSession.textContent  = '$' + data.session_cost.toFixed(3);
     if (data.lifetime_cost) costLifetime.textContent = '$' + data.lifetime_cost.toFixed(3);
+
+    if (data.image_sizes) rebuildSizeButtons(data.image_sizes);
 
   } catch (e) {
     setIndicator(indModel, false, '', 'Backend unreachable');
@@ -1438,18 +1440,30 @@ if (saved !== null) basePromptEl.value = saved;
 basePromptEl.addEventListener('blur', () => localStorage.setItem(PROMPT_KEY, basePromptEl.value));
 
 // ── Image size picker ─────────────────────────────────────────
-const SIZE_KEY   = 'dnd-atmo-image-size';
-let imageSize    = localStorage.getItem(SIZE_KEY) || '1024x1024';
+const SIZE_KEY = 'dnd-atmo-image-size';
+let imageSize  = localStorage.getItem(SIZE_KEY) || '1024x1024';
 
-document.querySelectorAll('.size-btn').forEach(btn => {
-  if (btn.dataset.size === imageSize) btn.classList.add('active');
-  else btn.classList.remove('active');
-  btn.addEventListener('click', () => {
-    imageSize = btn.dataset.size;
+function rebuildSizeButtons(sizes) {
+  const toggle = document.getElementById('size-toggle');
+  toggle.innerHTML = '';
+  // If saved size isn't valid for this model, reset to first option
+  if (!sizes.find(s => s.value === imageSize)) {
+    imageSize = sizes[0].value;
     localStorage.setItem(SIZE_KEY, imageSize);
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+  }
+  sizes.forEach(({ value, label }) => {
+    const btn = document.createElement('button');
+    btn.className = 'size-btn' + (value === imageSize ? ' active' : '');
+    btn.dataset.size = value;
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      imageSize = value;
+      localStorage.setItem(SIZE_KEY, imageSize);
+      toggle.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+    toggle.appendChild(btn);
   });
-});
+}
 
 // ── Tabs ─────────────────────────────────────────────────────
 document.getElementById('btn-tab-generate').addEventListener('click', () => switchTab('generate'));

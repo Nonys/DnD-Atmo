@@ -11,12 +11,20 @@ Built for DnD sessions: the DM generates images, players see them live on their 
 
 ## Setup
 
-**1. Configure your API key**
+**1. Configure your API key and settings**
 
 ```bash
 cp .env.example .env
-# Edit .env and paste your OpenAI API key
+# Edit .env — at minimum paste your OpenAI API key
 ```
+
+Key settings in `.env`:
+
+| Variable | Default | Options |
+|----------|---------|---------|
+| `OPENAI_API_KEY` | *(required)* | Your key from platform.openai.com |
+| `IMAGE_MODEL` | `gpt-image-1` | `gpt-image-1`, `dall-e-3` |
+| `IMAGE_QUALITY` | `medium` | gpt-image-1: `low` / `medium` / `high`  ·  dall-e-3: `standard` / `hd` |
 
 **2. Download a Whisper model**
 
@@ -100,7 +108,17 @@ Clicking any carousel thumbnail switches the main image. Clicking the main image
 
 ## Cost
 
-Images use DALL-E 3 (~$0.04 per image). Cost per image, session total, and lifetime total are shown in the footer of the DM interface and persisted in `data/costs.json`.
+Cost depends on the model and quality set in `.env`:
+
+| Model | Quality | ~Cost per image |
+|-------|---------|----------------|
+| gpt-image-1 | low | $0.011 |
+| gpt-image-1 | medium | $0.042 |
+| gpt-image-1 | high | $0.167 |
+| dall-e-3 | standard | $0.040 (square) · $0.080 (landscape/portrait) |
+| dall-e-3 | hd | $0.080 (square) · $0.120 (landscape/portrait) |
+
+Cost per image, session total, and lifetime total are shown in the footer of the DM interface and persisted in `data/costs.json`.
 
 ## Data
 

@@ -67,6 +67,13 @@ cmd_run() {
         else
             warn "OPENAI_API_KEY set but doesn't look like an sk- key — continuing anyway"
         fi
+
+        local img_model img_quality
+        img_model=$(grep -E '^IMAGE_MODEL=' .env | head -1 | cut -d'=' -f2- | tr -d '"'"'" | xargs)
+        img_quality=$(grep -E '^IMAGE_QUALITY=' .env | head -1 | cut -d'=' -f2- | tr -d '"'"'" | xargs)
+        img_model="${img_model:-gpt-image-1}"
+        img_quality="${img_quality:-medium}"
+        ok "Image model:  ${img_model}  (quality: ${img_quality})"
     fi
 
     # 3. Whisper model -----------------------------------------
