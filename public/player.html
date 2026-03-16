@@ -7,8 +7,6 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root { --panel: min(800px, calc(100vw - 32px)); }
-
     body {
       background: #0d0d0f;
       color: #c9b99a;
@@ -25,13 +23,44 @@
       letter-spacing: 0.15em;
       color: #e8d5a3;
       text-transform: uppercase;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       opacity: 0.85;
       text-decoration: none;
       display: block;
     }
     h1 a:hover { opacity: 1; }
 
+    /* ---- Carousel ---- */
+    #carousel {
+      width: min(calc(100vw - 32px), 1400px);
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 16px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: thin;
+      scrollbar-color: #3a3020 #0d0d0f;
+    }
+    #carousel::-webkit-scrollbar { height: 4px; }
+    #carousel::-webkit-scrollbar-track { background: #0d0d0f; }
+    #carousel::-webkit-scrollbar-thumb { background: #3a3020; }
+
+    .thumb {
+      flex-shrink: 0;
+      width: 88px;
+      height: 88px;
+      object-fit: cover;
+      border: 1px solid #2a2518;
+      cursor: pointer;
+      opacity: 0.55;
+      scroll-snap-align: start;
+      transition: opacity 0.2s, border-color 0.2s, transform 0.12s;
+    }
+    .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+    .thumb:active { transform: scale(0.92); }
+
+    /* ---- Main image ---- */
     #image-frame {
       position: relative;
       width: min(calc(100vw - 32px), 1400px);
@@ -69,11 +98,10 @@
       z-index: 0;
     }
 
+    /* ---- Prompt ---- */
     #prompt-display {
       display: none;
-      width: var(--panel);
-
-      margin-bottom: 16px;
+      width: min(800px, calc(100vw - 32px));
     }
     #prompt-display label {
       display: block;
@@ -94,36 +122,6 @@
       overflow-y: auto;
       white-space: pre-wrap;
     }
-
-    #gallery-label {
-      width: var(--panel);
-
-      font-size: 0.7rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #5a5040;
-      margin-bottom: 8px;
-    }
-
-    #gallery {
-      width: var(--panel);
-
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .thumb {
-      width: 72px;
-      height: 72px;
-      object-fit: cover;
-      border: 1px solid #2a2518;
-      cursor: pointer;
-      opacity: 0.65;
-      transition: opacity 0.2s, border-color 0.2s, transform 0.12s;
-    }
-    .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
-    .thumb:active { transform: scale(0.88); }
 
     #new-badge {
       display: none;
@@ -146,6 +144,8 @@
 
 <h1><a href="/">DnD Atmosphere</a></h1>
 
+<div id="carousel"></div>
+
 <div id="image-frame">
   <div id="placeholder">Awaiting vision...</div>
   <img id="prev-image" src="" alt="">
@@ -157,16 +157,13 @@
   <div id="prompt-text"></div>
 </div>
 
-<div id="gallery-label">Session Gallery</div>
-<div id="gallery"></div>
-
 <div id="new-badge">✦ New vision</div>
 
 <script>
 const currentImg    = document.getElementById('current-image');
 const prevImg       = document.getElementById('prev-image');
 const placeholder   = document.getElementById('placeholder');
-const gallery       = document.getElementById('gallery');
+const carousel      = document.getElementById('carousel');
 const newBadge      = document.getElementById('new-badge');
 const promptDisplay = document.getElementById('prompt-display');
 const promptTxt     = document.getElementById('prompt-text');
@@ -188,13 +185,12 @@ async function fetchGallery() {
 function showImage(url, prompt = '', slow = false) {
   placeholder.style.display = 'none';
 
-  // Crossfade: snapshot current into prev, fade prev out while new fades in
   if (currentImg.classList.contains('visible') && currentImg.src !== url) {
     prevImg.src = currentImg.src;
     prevImg.classList.toggle('slow', slow);
-    prevImg.style.opacity = '1';          // snap to full opacity
-    prevImg.offsetHeight;                 // force reflow so transition fires
-    prevImg.style.opacity = '0';          // now fade out
+    prevImg.style.opacity = '1';
+    prevImg.offsetHeight;
+    prevImg.style.opacity = '0';
   }
 
   currentImg.classList.remove('visible');
@@ -216,24 +212,20 @@ function urlPath(url) {
   return new URL(url, location.href).pathname;
 }
 
-function addThumb(url, prompt = '', prepend = false) {
+function addThumb(url, prompt = '') {
   const img = document.createElement('img');
   img.src = url;
+  img.loading = 'lazy';
   img.className = 'thumb';
   img.dataset.prompt = prompt;
   img.addEventListener('click', () => {
-    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    carousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
     img.classList.add('active');
     showImage(url, prompt);
   });
-  if (prepend && gallery.firstChild) {
-    gallery.insertBefore(img, gallery.firstChild);
-  } else {
-    gallery.appendChild(img);
-  }
+  carousel.appendChild(img);
   return img;
 }
-
 
 function flashBadge() {
   clearTimeout(badgeTimer);
@@ -243,7 +235,7 @@ function flashBadge() {
 
 function thumbMap() {
   const map = new Map();
-  gallery.querySelectorAll('.thumb').forEach(t => map.set(urlPath(t.src), t));
+  carousel.querySelectorAll('.thumb').forEach(t => map.set(urlPath(t.src), t));
   return map;
 }
 
@@ -256,13 +248,11 @@ function clearMain() {
   latestUrl = null;
 }
 
-// Full sync: add new images, remove gone ones, enforce API order
 async function sync(isInit = false) {
   const images = await fetchGallery();
   const apiMap  = new Map(images.map(item => [urlPath(item.url), item]));
   const current = thumbMap();
 
-  // Remove thumbnails no longer in the API (deleted or hidden)
   let removedActive = false;
   for (const [path, thumb] of current) {
     if (!apiMap.has(path)) {
@@ -273,34 +263,36 @@ async function sync(isInit = false) {
 
   if (images.length === 0) { clearMain(); return; }
 
-  // Add thumbnails that appeared since last sync (new or revealed)
   let addedAny = false;
   for (const [path, item] of apiMap) {
     if (!current.has(path)) {
-      addThumb(item.url, item.prompt); // append; we reorder below
+      addThumb(item.url, item.prompt);
       addedAny = true;
     }
   }
 
-  // Reorder gallery to always match API order (appendChild moves existing nodes)
+  // Reorder to match API order
   const thumbsAfter = new Map();
-  gallery.querySelectorAll('.thumb').forEach(t => thumbsAfter.set(urlPath(t.src), t));
+  carousel.querySelectorAll('.thumb').forEach(t => thumbsAfter.set(urlPath(t.src), t));
   for (const [path] of apiMap) {
     const thumb = thumbsAfter.get(path);
-    if (thumb) gallery.appendChild(thumb);
+    if (thumb) carousel.appendChild(thumb);
   }
 
   const newest = images[0];
 
   if (isInit || removedActive || addedAny) {
-    const newestThumb = [...gallery.querySelectorAll('.thumb')].find(t => urlPath(t.src) === urlPath(newest.url));
-    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
-    if (newestThumb) newestThumb.classList.add('active');
+    const newestThumb = [...carousel.querySelectorAll('.thumb')].find(t => urlPath(t.src) === urlPath(newest.url));
+    carousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    if (newestThumb) {
+      newestThumb.classList.add('active');
+      newestThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+    }
     showImage(newest.url, newest.prompt ?? '', !isInit && addedAny);
     latestUrl = newest.url;
     if (!isInit && addedAny) flashBadge();
   } else if (removedActive) {
-    const firstThumb = gallery.querySelector('.thumb');
+    const firstThumb = carousel.querySelector('.thumb');
     if (firstThumb) {
       firstThumb.classList.add('active');
       showImage(firstThumb.src, firstThumb.dataset.prompt ?? '');
