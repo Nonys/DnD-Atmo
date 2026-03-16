@@ -91,3 +91,8 @@ public/sessions/YYYY-MM-DD/image_NN.txt   — prompt used for each image
 data/costs.json                           — lifetime and session cost tracking
 models/ggml-model.bin                     — whisper model (not in Docker image)
 ```
+
+## Examples
+
+![homepage.png](public/examples/homepage.png)
+![img.png](public/examples/player.png)
