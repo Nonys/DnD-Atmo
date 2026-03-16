@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DnD Atmosphere Generator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <style>
+<style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -28,26 +27,15 @@
       opacity: 0.85;
     }
 
-    #qr-toggle {
+    #qr-link {
       font-size: 0.72rem;
       letter-spacing: 0.08em;
       color: #5a5040;
-      cursor: pointer;
+      text-decoration: none;
       margin-bottom: 12px;
-      user-select: none;
-    }
-    #qr-toggle:hover { color: #9a8a6a; }
-
-    #qr-codes {
       display: none;
-      gap: 20px;
-      justify-content: center;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
     }
-    .qr-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-    .qr-box  { padding: 5px; background: #fff; border: 1px solid #3a3020; }
-    .qr-item span { font-size: 0.65rem; color: #5a5040; letter-spacing: 0.04em; }
+    #qr-link:hover { color: #9a8a6a; }
 
     /* ---- Main image display ---- */
     #image-frame {
@@ -421,8 +409,7 @@
 <body>
 
 <h1>DnD Atmosphere</h1>
-<div id="qr-toggle" style="display:none">▶ Show player QR codes</div>
-<div id="qr-codes"></div>
+<a id="qr-link" href="/qr.html" target="_blank">&#9654; Player QR codes</a>
 
 <div id="image-frame">
   <div id="placeholder">Awaiting vision...</div>
@@ -556,31 +543,7 @@ async function checkBackendStatus() {
     if (data.session_cost)  costSession.textContent  = '$' + data.session_cost.toFixed(3);
     if (data.lifetime_cost) costLifetime.textContent = '$' + data.lifetime_cost.toFixed(3);
     if (data.server_ips && data.server_ips.length) {
-      const lanEl = document.getElementById('lan-url');
-      const qrEl  = document.getElementById('qr-codes');
-
-      const qrToggle = document.getElementById('qr-toggle');
-      qrToggle.style.display = '';
-      qrToggle.addEventListener('click', () => {
-        const visible = qrEl.style.display === 'flex';
-        qrEl.style.display = visible ? 'none' : 'flex';
-        qrToggle.textContent = (visible ? '▶' : '▼') + ' Show player QR codes';
-      });
-
-      data.server_ips.forEach(ip => {
-        const url  = `http://${ip}:8080/viewer.html`;
-        const item = document.createElement('div');
-        item.className = 'qr-item';
-        const box = document.createElement('div');
-        box.className = 'qr-box';
-        new QRCode(box, { text: url, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M });
-        const label = document.createElement('span');
-        label.textContent = ip;
-        item.appendChild(box);
-        item.appendChild(label);
-        qrEl.appendChild(item);
-      });
-
+      document.getElementById('qr-link').style.display = 'block';
     }
   } catch (e) {
     setIndicator(indModel, false, '', 'Backend unreachable');

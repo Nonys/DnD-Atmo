@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player QR Codes</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0f;
+      color: #c9b99a;
+      font-family: 'Georgia', serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 16px;
+      gap: 32px;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      letter-spacing: 0.18em;
+      color: #e8d5a3;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+
+    #qr-codes {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .qr-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .qr-box {
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #3a3020;
+    }
+
+    .qr-url {
+      font-size: 0.8rem;
+      color: #7a6a4a;
+      letter-spacing: 0.06em;
+    }
+
+    #message {
+      font-size: 0.9rem;
+      color: #5a5040;
+      letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Player Viewer</h1>
+<div id="qr-codes"></div>
+<div id="message">Loading...</div>
+
+<script>
+async function init() {
+  const msgEl = document.getElementById('message');
+  const codesEl = document.getElementById('qr-codes');
+
+  let ips = [];
+  try {
+    const resp = await fetch('/api.php?action=status');
+    const data = await resp.json();
+    ips = data.server_ips ?? [];
+  } catch (_) {
+    msgEl.textContent = 'Could not reach server.';
+    return;
+  }
+
+  if (ips.length === 0) {
+    msgEl.textContent = 'No network addresses found.';
+    return;
+  }
+
+  msgEl.style.display = 'none';
+
+  ips.forEach(ip => {
+    const url = `http://${ip}:8080/viewer.html`;
+
+    const item = document.createElement('div');
+    item.className = 'qr-item';
+
+    const box = document.createElement('div');
+    box.className = 'qr-box';
+    new QRCode(box, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+
+    const label = document.createElement('div');
+    label.className = 'qr-url';
+    label.textContent = url;
+
+    item.appendChild(box);
+    item.appendChild(label);
+    codesEl.appendChild(item);
+  });
+}
+
+init();
+</script>
+
+</body>
+</html>
