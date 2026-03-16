@@ -151,6 +151,8 @@ if ($action === 'transcribe') {
 if ($action === 'generate') {
     $basePrompt = trim($_POST['base_prompt'] ?? '');
     $scene      = trim($_POST['scene']       ?? '');
+    $allowed    = ['1024x1024', '1792x1024', '1024x1792'];
+    $size       = in_array($_POST['size'] ?? '', $allowed) ? $_POST['size'] : '1024x1024';
 
     if ($basePrompt === '' && $scene === '') {
         http_response_code(400);
@@ -161,11 +163,12 @@ if ($action === 'generate') {
     $finalPrompt = buildPrompt($basePrompt, $scene);
 
     // Generate image (up to 3 retries)
+
     $imageB64  = null;
     $lastError = 'Unknown error';
 
     for ($attempt = 1; $attempt <= 3; $attempt++) {
-        $result = callOpenAI($finalPrompt);
+        $result = callOpenAI($finalPrompt, $size);
         if ($result['ok']) {
             $imageB64 = $result['b64'];
             break;
@@ -384,7 +387,7 @@ function buildPrompt(string $style, string $scene): string
     return implode("\n\n", $parts);
 }
 
-function callOpenAI(string $prompt): array
+function callOpenAI(string $prompt, string $size = '1024x1024'): array
 {
     $apiKey = OPENAI_API_KEY;
     if ($apiKey === '') {
@@ -395,7 +398,7 @@ function callOpenAI(string $prompt): array
         'model'           => 'dall-e-3',
         'prompt'          => $prompt,
         'n'               => 1,
-        'size'            => '1024x1024',
+        'size'            => $size,
         'response_format' => 'b64_json',
     ]);
 

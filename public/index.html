@@ -7,6 +7,8 @@
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root { --panel: min(720px, calc(100vw - 32px)); }
+
     body {
       background: #0d0d0f;
       color: #c9b99a;
@@ -40,13 +42,13 @@
     /* ---- Main image display ---- */
     #image-frame {
       position: relative;
-      width: 512px;
-      max-width: 100%;
+      width: min(calc(100vw - 32px), 1000px);
       aspect-ratio: 1;
       background: #1a1710;
       border: 1px solid #3a3020;
       margin-bottom: 16px;
       overflow: hidden;
+      transition: aspect-ratio 0.4s ease;
     }
 
     #current-image, #prev-image {
@@ -57,9 +59,11 @@
       object-fit: cover;
     }
 
-    #current-image { opacity: 0; transition: opacity 1.2s ease; z-index: 2; }
+    #current-image { opacity: 0; transition: opacity 0.5s ease; z-index: 2; }
+    #current-image.slow { transition: opacity 1.2s ease; }
     #current-image.visible { opacity: 1; cursor: zoom-in; }
-    #prev-image    { opacity: 0.25; z-index: 1; }
+    #prev-image { opacity: 0; z-index: 1; transition: opacity 0.5s ease; }
+    #prev-image.slow { transition: opacity 1.2s ease; }
 
     #placeholder {
       position: absolute;
@@ -75,8 +79,8 @@
 
     /* ---- Readiness indicators ---- */
     #readiness {
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       display: flex;
       gap: 20px;
       justify-content: center;
@@ -174,8 +178,8 @@
       align-items: center;
       gap: 10px;
       margin-bottom: 16px;
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
     }
     #scene-input {
       width: 100%;
@@ -199,8 +203,8 @@
       align-items: center;
       gap: 10px;
       margin-bottom: 16px;
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
     }
     #upload-drop {
       width: 100%;
@@ -271,8 +275,8 @@
     /* ---- Transcription box ---- */
     #transcription-box {
       display: none;
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       margin-bottom: 12px;
     }
     #transcription-box label {
@@ -307,8 +311,8 @@
 
     /* ---- Prompt ---- */
     #prompt-area {
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       margin-bottom: 16px;
     }
     #prompt-area label {
@@ -333,10 +337,32 @@
     }
     #base-prompt:focus { outline: none; border-color: #6a5a3a; }
 
+    /* ---- Size toggle ---- */
+    #size-toggle {
+      display: flex;
+      border: 1px solid #3a3020;
+      width: var(--panel);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .size-btn {
+      flex: 1;
+      padding: 5px 0;
+      font-size: 0.72rem;
+      border: none;
+      border-radius: 0;
+      background: #111008;
+      color: #4a3f2a;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .size-btn:hover:not(.active) { background: #191510; color: #9a8a6a; border-color: transparent; }
+    .size-btn.active { background: #1f1a10; color: #e8d5a3; }
+
     /* ---- Cost display ---- */
     #cost-bar {
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       display: flex;
       gap: 24px;
       justify-content: center;
@@ -349,8 +375,8 @@
 
     /* ---- Gallery ---- */
     #gallery-label {
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       font-size: 0.7rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
@@ -359,8 +385,8 @@
     }
 
     #gallery {
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
@@ -379,9 +405,10 @@
       border: 1px solid #2a2518;
       cursor: pointer;
       opacity: 0.65;
-      transition: opacity 0.2s, border-color 0.2s;
+      transition: opacity 0.2s, border-color 0.2s, transform 0.12s;
     }
     .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+    .thumb:active { transform: scale(0.88); }
     .btn-del {
       display: none;
       position: absolute;
@@ -425,8 +452,8 @@
     /* ---- Prompt display ---- */
     #prompt-display {
       display: none;
-      width: 512px;
-      max-width: 100%;
+      width: var(--panel);
+
       margin-top: 10px;
     }
     #prompt-display label {
@@ -514,6 +541,12 @@
   <textarea id="base-prompt" spellcheck="false">fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting, dark fantasy</textarea>
 </div>
 
+<div id="size-toggle">
+  <button class="size-btn active" data-size="1024x1024">Square 1:1</button>
+  <button class="size-btn"        data-size="1792x1024">Landscape 16:9</button>
+  <button class="size-btn"        data-size="1024x1792">Portrait 9:16</button>
+</div>
+
 <div id="cost-bar">
   <span>Image: <b id="cost-image">—</b></span>
   <span>Session: <b id="cost-session">$0.000</b></span>
@@ -556,6 +589,7 @@ const currentImg   = document.getElementById('current-image');
 const prevImg      = document.getElementById('prev-image');
 const placeholder  = document.getElementById('placeholder');
 const gallery      = document.getElementById('gallery');
+const imageFrame   = document.getElementById('image-frame');
 const basePromptEl = document.getElementById('base-prompt');
 const costImage    = document.getElementById('cost-image');
 const costSession  = document.getElementById('cost-session');
@@ -841,6 +875,7 @@ async function handleRecordingComplete() {
   formData2.append('action',       'generate');
   formData2.append('base_prompt',  basePromptEl.value.trim());
   formData2.append('scene',        transcribeResult.transcription);
+  formData2.append('size',         imageSize);
 
   let genResult;
   try {
@@ -896,6 +931,9 @@ function switchMode(mode) {
   indMic.style.display      = mode !== 'voice' ? 'none' : '';
   btnGrantMic.style.display = mode !== 'voice' ? 'none' : (micBlocked ? 'block' : 'none');
   if (mode !== 'voice') transcriptionBox.style.display = 'none';
+  const isUpload = mode === 'upload';
+  document.getElementById('prompt-area').style.display  = isUpload ? 'none' : '';
+  document.getElementById('size-toggle').style.display  = isUpload ? 'none' : '';
   updateStartButton();
   updateTextButton();
   updateUploadButton();
@@ -1007,6 +1045,7 @@ async function handleTextSubmit() {
   fd.append('action',      'generate');
   fd.append('base_prompt', basePrompt);
   fd.append('scene',       sceneText);
+  fd.append('size',        imageSize);
 
   let genResult;
   try {
@@ -1070,7 +1109,7 @@ function hideSteps() {
 // ============================================================
 function displayImage(url, prompt = '') {
   const thumb = addThumb(url, prompt, true); // prepend — new images go to the front
-  selectThumb(thumb, url, prompt);
+  selectThumb(thumb, url, prompt, true);     // slow fade for freshly generated images
 }
 
 function addThumb(url, prompt = '', prepend = false, isHidden = false) {
@@ -1169,14 +1208,26 @@ async function deleteImage(wrap, img, url) {
   wrap.remove();
 }
 
-function selectThumb(thumbEl, url, prompt) {
+function selectThumb(thumbEl, url, prompt, slow = false) {
   document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
   thumbEl.classList.add('active');
   placeholder.style.display = 'none';
-  if (currentImg.src && !currentImg.src.endsWith('undefined')) prevImg.src = currentImg.src;
+
+  if (currentImg.classList.contains('visible') && currentImg.src !== url) {
+    prevImg.src = currentImg.src;
+    prevImg.classList.toggle('slow', slow);
+    prevImg.style.opacity = '1';
+    prevImg.offsetHeight;
+    prevImg.style.opacity = '0';
+  }
+
   currentImg.classList.remove('visible');
+  currentImg.classList.toggle('slow', slow);
   currentImg.src = url;
-  currentImg.onload = () => currentImg.classList.add('visible');
+  currentImg.onload = () => {
+    imageFrame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
+    currentImg.classList.add('visible');
+  };
   if (prompt) {
     promptTxt.textContent = prompt;
     promptDisplay.style.display = 'block';
@@ -1250,6 +1301,20 @@ const PROMPT_KEY = 'dnd-atmo-base-prompt';
 const saved = localStorage.getItem(PROMPT_KEY);
 if (saved !== null) basePromptEl.value = saved;
 basePromptEl.addEventListener('blur', () => localStorage.setItem(PROMPT_KEY, basePromptEl.value));
+
+// ── Image size picker ─────────────────────────────────────────
+const SIZE_KEY   = 'dnd-atmo-image-size';
+let imageSize    = localStorage.getItem(SIZE_KEY) || '1024x1024';
+
+document.querySelectorAll('.size-btn').forEach(btn => {
+  if (btn.dataset.size === imageSize) btn.classList.add('active');
+  else btn.classList.remove('active');
+  btn.addEventListener('click', () => {
+    imageSize = btn.dataset.size;
+    localStorage.setItem(SIZE_KEY, imageSize);
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
 
 // ── Boot ─────────────────────────────────────────────────────
 preflight();
