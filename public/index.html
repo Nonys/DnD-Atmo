@@ -28,14 +28,15 @@
       opacity: 0.85;
     }
 
-    #lan-url {
-      font-size: 0.78rem;
+    #qr-toggle {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
       color: #5a5040;
-      letter-spacing: 0.06em;
-      margin-bottom: 16px;
+      cursor: pointer;
+      margin-bottom: 12px;
+      user-select: none;
     }
-    #lan-url a { color: #7a6a4a; text-decoration: none; }
-    #lan-url a:hover { color: #b09a6a; }
+    #qr-toggle:hover { color: #9a8a6a; }
 
     #qr-codes {
       display: none;
@@ -287,6 +288,12 @@
       flex-wrap: wrap;
     }
 
+    .thumb-wrap {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+    }
     .thumb {
       width: 72px;
       height: 72px;
@@ -297,6 +304,23 @@
       transition: opacity 0.2s, border-color 0.2s;
     }
     .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+    .btn-del {
+      display: none;
+      position: absolute;
+      top: 3px; right: 3px;
+      width: 18px; height: 18px;
+      padding: 0;
+      background: rgba(15,5,5,0.88);
+      border: 1px solid #7a3a3a;
+      color: #d46a6a;
+      font-size: 0.8rem;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      cursor: pointer;
+    }
+    .btn-del:hover { background: #2a0a0a; border-color: #aa5a5a; }
+    .thumb-wrap:hover .btn-del { display: block; }
 
     /* ---- Prompt display ---- */
     #prompt-display {
@@ -329,7 +353,7 @@
 <body>
 
 <h1>DnD Atmosphere</h1>
-<div id="lan-url"></div>
+<div id="qr-toggle" style="display:none">▶ Show player QR codes</div>
 <div id="qr-codes"></div>
 
 <div id="image-frame">
@@ -454,10 +478,13 @@ async function checkBackendStatus() {
       const lanEl = document.getElementById('lan-url');
       const qrEl  = document.getElementById('qr-codes');
 
-      lanEl.innerHTML = 'Players: ' + data.server_ips.map(ip => {
-        const url = `http://${ip}:8080/viewer.html`;
-        return `<a href="${url}" target="_blank">${url}</a>`;
-      }).join(' &nbsp;·&nbsp; ');
+      const qrToggle = document.getElementById('qr-toggle');
+      qrToggle.style.display = '';
+      qrToggle.addEventListener('click', () => {
+        const visible = qrEl.style.display === 'flex';
+        qrEl.style.display = visible ? 'none' : 'flex';
+        qrToggle.textContent = (visible ? '▶' : '▼') + ' Show player QR codes';
+      });
 
       data.server_ips.forEach(ip => {
         const url  = `http://${ip}:8080/viewer.html`;
@@ -473,7 +500,6 @@ async function checkBackendStatus() {
         qrEl.appendChild(item);
       });
 
-      qrEl.style.display = 'flex';
     }
   } catch (e) {
     setIndicator(indModel, false, '', 'Backend unreachable');
@@ -774,16 +800,70 @@ function displayImage(url, prompt = '') {
 }
 
 function addThumb(url, prompt = '', prepend = false) {
+  const wrap = document.createElement('div');
+  wrap.className = 'thumb-wrap';
+
   const img = document.createElement('img');
   img.src = url;
   img.className = 'thumb';
+  img.dataset.prompt = prompt;
   img.addEventListener('click', () => selectThumb(img, url, prompt));
+
+  wrap.appendChild(img);
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const del = document.createElement('button');
+    del.className = 'btn-del';
+    del.textContent = '×';
+    del.title = 'Delete image';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      deleteImage(wrap, img, url);
+    });
+    wrap.appendChild(del);
+  }
+
   if (prepend && gallery.firstChild) {
-    gallery.insertBefore(img, gallery.firstChild);
+    gallery.insertBefore(wrap, gallery.firstChild);
   } else {
-    gallery.appendChild(img);
+    gallery.appendChild(wrap);
   }
   return img;
+}
+
+async function deleteImage(wrap, img, url) {
+  if (!confirm('Delete this image?')) return;
+
+  const fd = new FormData();
+  fd.append('action', 'delete');
+  fd.append('url', url);
+
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+  } catch (e) {
+    setStatus('Delete failed: ' + e.message, true);
+    return;
+  }
+
+  const wasActive = img.classList.contains('active');
+  if (wasActive) {
+    const allWraps = [...gallery.querySelectorAll('.thumb-wrap')];
+    const idx      = allWraps.indexOf(wrap);
+    const next     = allWraps[idx + 1] || allWraps[idx - 1];
+    if (next) {
+      const nextImg = next.querySelector('.thumb');
+      selectThumb(nextImg, nextImg.src, nextImg.dataset.prompt || '');
+    } else {
+      currentImg.classList.remove('visible');
+      currentImg.src = '';
+      placeholder.style.display = '';
+      promptDisplay.style.display = 'none';
+    }
+  }
+
+  wrap.remove();
 }
 
 function selectThumb(thumbEl, url, prompt) {

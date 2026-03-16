@@ -205,6 +205,36 @@ if ($action === 'generate') {
     exit;
 }
 
+// ============================================================
+// Action: delete
+// Receives: url (POST field, e.g. /sessions/2026-03-16/image_01.png)
+// Returns:  { ok: true }
+// ============================================================
+if ($action === 'delete') {
+    $host = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);
+    if ($host !== 'localhost' && $host !== '127.0.0.1') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Delete is only allowed from localhost']);
+        exit;
+    }
+
+    $url  = trim($_POST['url'] ?? '');
+    $path = realpath(__DIR__ . $url);
+    $base = realpath(SESSIONS_DIR);
+
+    if (!$path || !$base || strpos($path, $base . DIRECTORY_SEPARATOR) !== 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid path']);
+        exit;
+    }
+
+    @unlink($path);
+    @unlink(preg_replace('/\.png$/', '.txt', $path));
+
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
 http_response_code(400);
 echo json_encode(['error' => 'Unknown action']);
 

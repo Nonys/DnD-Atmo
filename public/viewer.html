@@ -62,6 +62,32 @@
       z-index: 0;
     }
 
+    #prompt-display {
+      display: none;
+      width: 512px;
+      max-width: 100%;
+      margin-bottom: 16px;
+    }
+    #prompt-display label {
+      display: block;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #5a5040;
+      margin-bottom: 5px;
+    }
+    #prompt-text {
+      background: #0f0e0a;
+      border: 1px solid #2a2518;
+      color: #7a6a4a;
+      font-size: 0.8rem;
+      padding: 8px 10px;
+      line-height: 1.5;
+      max-height: 90px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
     #gallery-label {
       width: 512px;
       max-width: 100%;
@@ -118,17 +144,24 @@
   <img id="current-image" src="" alt="">
 </div>
 
+<div id="prompt-display">
+  <label>Prompt used</label>
+  <div id="prompt-text"></div>
+</div>
+
 <div id="gallery-label">Session Gallery</div>
 <div id="gallery"></div>
 
 <div id="new-badge">✦ New vision</div>
 
 <script>
-const currentImg  = document.getElementById('current-image');
-const prevImg     = document.getElementById('prev-image');
-const placeholder = document.getElementById('placeholder');
-const gallery     = document.getElementById('gallery');
-const newBadge    = document.getElementById('new-badge');
+const currentImg   = document.getElementById('current-image');
+const prevImg      = document.getElementById('prev-image');
+const placeholder  = document.getElementById('placeholder');
+const gallery      = document.getElementById('gallery');
+const newBadge     = document.getElementById('new-badge');
+const promptDisplay = document.getElementById('prompt-display');
+const promptTxt    = document.getElementById('prompt-text');
 
 let latestUrl = null;
 let badgeTimer = null;
@@ -143,7 +176,7 @@ async function fetchGallery() {
   }
 }
 
-function showImage(url) {
+function showImage(url, prompt = '') {
   placeholder.style.display = 'none';
   if (currentImg.src && !currentImg.src.endsWith('undefined') && currentImg.src !== url) {
     prevImg.src = currentImg.src;
@@ -151,16 +184,22 @@ function showImage(url) {
   currentImg.classList.remove('visible');
   currentImg.src = url;
   currentImg.onload = () => currentImg.classList.add('visible');
+  if (prompt) {
+    promptTxt.textContent = prompt;
+    promptDisplay.style.display = 'block';
+  } else {
+    promptDisplay.style.display = 'none';
+  }
 }
 
-function addThumb(url, prepend = false) {
+function addThumb(url, prompt = '', prepend = false) {
   const img = document.createElement('img');
   img.src = url;
   img.className = 'thumb';
   img.addEventListener('click', () => {
     document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
     img.classList.add('active');
-    showImage(url);
+    showImage(url, prompt);
   });
   if (prepend && gallery.firstChild) {
     gallery.insertBefore(img, gallery.firstChild);
@@ -169,6 +208,7 @@ function addThumb(url, prepend = false) {
   }
   return img;
 }
+
 
 function flashBadge() {
   clearTimeout(badgeTimer);
@@ -181,12 +221,12 @@ async function init() {
   const images = await fetchGallery();
   if (images.length === 0) return;
 
-  images.forEach(item => addThumb(item.url));
+  images.forEach(item => addThumb(item.url, item.prompt));
   latestUrl = images[0].url;
 
   const firstThumb = gallery.querySelector('.thumb');
   if (firstThumb) firstThumb.classList.add('active');
-  showImage(latestUrl);
+  showImage(images[0].url, images[0].prompt);
 }
 
 // Poll for new images
@@ -194,13 +234,13 @@ async function poll() {
   const images = await fetchGallery();
   if (images.length === 0) return;
 
-  const newestUrl = images[0].url;
-  if (newestUrl !== latestUrl) {
-    latestUrl = newestUrl;
-    const thumb = addThumb(newestUrl, true);
+  const newest = images[0];
+  if (newest.url !== latestUrl) {
+    latestUrl = newest.url;
+    const thumb = addThumb(newest.url, newest.prompt, true);
     document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
-    showImage(newestUrl);
+    showImage(newest.url, newest.prompt);
     flashBadge();
   }
 }
