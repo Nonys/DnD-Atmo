@@ -11,6 +11,14 @@ define('IMAGE_COST_USD', 0.040);   // dall-e-3 standard 1024x1024
 define('COSTS_FILE',    '/app/data/costs.json');
 define('SESSIONS_DIR',  __DIR__ . '/sessions');
 
+// Hidden guardrails appended to every prompt — not shown in UI
+define('PROMPT_GUARDRAILS',
+    'Render this as a first-person perspective view — exactly what the hero sees through their own eyes, ' .
+    'fully immersed in the scene. No frames, no borders, no vignettes, no painting edges, no decorative ' .
+    'elements, no picture-on-a-wall effect. Fill the entire image edge to edge. No text overlays, no UI, ' .
+    'no fourth-wall breaks. The image must feel like standing inside the world, not looking at artwork.'
+);
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -124,30 +132,28 @@ if ($action === 'transcribe') {
     }
     @unlink($tmpWav);
 
-    $finalPrompt = $basePrompt;
-    if ($transcription !== '') {
-        $finalPrompt .= "\n\n" . $transcription;
-    }
-
     echo json_encode([
         'transcription' => $transcription,
-        'final_prompt'  => $finalPrompt,
     ]);
     exit;
 }
 
 // ============================================================
 // Action: generate
-// Receives: final_prompt (POST field)
-// Returns:  { image_url, cost_image, cost_session, cost_lifetime }
+// Receives: base_prompt + scene (POST fields)
+// Returns:  { image_url, prompt_used, cost_image, cost_session, cost_lifetime }
 // ============================================================
 if ($action === 'generate') {
-    $finalPrompt = trim($_POST['final_prompt'] ?? '');
-    if ($finalPrompt === '') {
+    $basePrompt = trim($_POST['base_prompt'] ?? '');
+    $scene      = trim($_POST['scene']       ?? '');
+
+    if ($basePrompt === '' && $scene === '') {
         http_response_code(400);
-        echo json_encode(['error' => 'final_prompt is required']);
+        echo json_encode(['error' => 'base_prompt or scene is required']);
         exit;
     }
+
+    $finalPrompt = buildPrompt($basePrompt, $scene);
 
     // Generate image (up to 3 retries)
     $imageB64  = null;
@@ -198,6 +204,7 @@ if ($action === 'generate') {
 
     echo json_encode([
         'image_url'     => '/sessions/' . $today . '/' . $imageName . '.png',
+        'prompt_used'   => $finalPrompt,
         'cost_image'    => IMAGE_COST_USD,
         'cost_session'  => $costs['session_cost'],
         'cost_lifetime' => $costs['lifetime_cost'],
@@ -242,6 +249,23 @@ echo json_encode(['error' => 'Unknown action']);
 // ============================================================
 // Helpers
 // ============================================================
+
+function buildPrompt(string $style, string $scene): string
+{
+    $parts = [];
+
+    if ($style !== '') {
+        $parts[] = "World atmosphere and visual style: {$style}";
+    }
+
+    if ($scene !== '') {
+        $parts[] = "Scene to depict: {$scene}";
+    }
+
+    $parts[] = PROMPT_GUARDRAILS;
+
+    return implode("\n\n", $parts);
+}
 
 function callOpenAI(string $prompt): array
 {

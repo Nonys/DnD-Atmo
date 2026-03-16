@@ -389,9 +389,10 @@
       font-size: 0.8rem;
       padding: 8px 10px;
       line-height: 1.5;
-      max-height: 90px;
+      height: 90px;
       overflow-y: auto;
       white-space: pre-wrap;
+      resize: vertical;
     }
   </style>
 </head>
@@ -791,7 +792,8 @@ async function handleRecordingComplete() {
 
   const formData2 = new FormData();
   formData2.append('action',       'generate');
-  formData2.append('final_prompt', transcribeResult.final_prompt);
+  formData2.append('base_prompt',  basePromptEl.value.trim());
+  formData2.append('scene',        transcribeResult.transcription);
 
   let genResult;
   try {
@@ -807,7 +809,7 @@ async function handleRecordingComplete() {
   }
 
   hideSteps();
-  displayImage(genResult.image_url, transcribeResult.final_prompt);
+  displayImage(genResult.image_url, genResult.prompt_used);
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -863,7 +865,6 @@ btnTextSubmit.addEventListener('click', handleTextSubmit);
 async function handleTextSubmit() {
   const sceneText  = sceneInput.value.trim();
   const basePrompt = basePromptEl.value.trim();
-  const finalPrompt = basePrompt + (sceneText ? '\n\n' + sceneText : '');
 
   isGenerating = true;
   updateTextButton();
@@ -875,8 +876,9 @@ async function handleTextSubmit() {
   setStatus('Generating image...');
 
   const fd = new FormData();
-  fd.append('action',       'generate');
-  fd.append('final_prompt', finalPrompt);
+  fd.append('action',      'generate');
+  fd.append('base_prompt', basePrompt);
+  fd.append('scene',       sceneText);
 
   let genResult;
   try {
@@ -892,7 +894,7 @@ async function handleTextSubmit() {
   }
 
   hideSteps();
-  displayImage(genResult.image_url, finalPrompt);
+  displayImage(genResult.image_url, genResult.prompt_used);
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -1081,6 +1083,12 @@ function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
   statusEl.className = isError ? 'error' : '';
 }
+
+// ── Base prompt persistence ───────────────────────────────────
+const PROMPT_KEY = 'dnd-atmo-base-prompt';
+const saved = localStorage.getItem(PROMPT_KEY);
+if (saved !== null) basePromptEl.value = saved;
+basePromptEl.addEventListener('blur', () => localStorage.setItem(PROMPT_KEY, basePromptEl.value));
 
 // ── Boot ─────────────────────────────────────────────────────
 preflight();
