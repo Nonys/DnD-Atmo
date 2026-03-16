@@ -4,12 +4,14 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
 // --- Config ---
-define('WHISPER_BIN',   '/usr/local/bin/whisper-cli');
-define('WHISPER_MODEL', '/app/models/ggml-model.bin');
-define('OPENAI_API_KEY', (string) getenv('OPENAI_API_KEY'));
-define('IMAGE_COST_USD', 0.040);   // dall-e-3 standard 1024x1024
-define('COSTS_FILE',    '/app/data/costs.json');
-define('SESSIONS_DIR',  __DIR__ . '/sessions');
+define('WHISPER_BIN',        '/usr/local/bin/whisper-cli');
+define('WHISPER_MODEL',      '/app/models/ggml-model.bin');
+define('OPENAI_API_KEY',     (string) getenv('OPENAI_API_KEY'));
+define('IMAGE_COST_USD',     0.040);   // dall-e-3 standard 1024x1024
+define('COSTS_FILE',         '/app/data/costs.json');
+define('SESSIONS_DIR',       __DIR__ . '/sessions');
+define('WHISPER_TIMEOUT_S',  120);     // seconds before transcription is killed
+define('OPENAI_TIMEOUT_S',   120);     // seconds before DALL-E request is aborted
 
 // Hidden guardrails appended to every prompt — not shown in UI
 define('PROMPT_GUARDRAILS',
@@ -125,12 +127,19 @@ if ($action === 'transcribe') {
     $transcription = '';
     if (file_exists(WHISPER_MODEL)) {
         $whisperCmd = sprintf(
-            '%s -m %s -f %s -l cs -nt 2>/dev/null',
+            'timeout %d %s -m %s -f %s -l cs -nt 2>/dev/null',
+            WHISPER_TIMEOUT_S,
             escapeshellarg(WHISPER_BIN),
             escapeshellarg(WHISPER_MODEL),
             escapeshellarg($tmpWav)
         );
         exec($whisperCmd, $whisperOut, $whisperRc);
+        if ($whisperRc === 124) {
+            @unlink($tmpWav);
+            http_response_code(504);
+            echo json_encode(['error' => 'Transcription timed out after 2 minutes']);
+            exit;
+        }
         if ($whisperRc === 0) {
             $transcription = trim(implode(' ', $whisperOut));
         }
@@ -409,7 +418,7 @@ function callOpenAI(string $prompt, string $size = '1024x1024'): array
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_TIMEOUT        => OPENAI_TIMEOUT_S,
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $apiKey,
