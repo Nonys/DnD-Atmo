@@ -207,6 +207,10 @@ if ($action === 'generate') {
     // Also save the prompt alongside the image
     file_put_contents("$sessionDir/$imageName.txt", $finalPrompt);
 
+    if (($_POST['hidden'] ?? '0') === '1') {
+        file_put_contents("$sessionDir/$imageName.hidden", '');
+    }
+
     // Update costs
     $costs = loadCosts();
     if (($costs['session_date'] ?? '') !== $today) {
@@ -249,6 +253,7 @@ if ($action === 'upload') {
     }
 
     $description = trim($_POST['description'] ?? '');
+    $startHidden = ($_POST['hidden'] ?? '0') === '1';
 
     // Save to sessions dir
     $today      = date('Y-m-d');
@@ -286,9 +291,12 @@ if ($action === 'upload') {
     if ($description !== '') {
         file_put_contents("$sessionDir/$imageName.txt", $description);
     }
+    if ($startHidden) {
+        file_put_contents("$sessionDir/$imageName.hidden", '');
+    }
 
     echo json_encode([
-        'image_url'  => '/sessions/' . $today . '/' . $imageName . '.png',
+        'image_url'   => '/sessions/' . $today . '/' . $imageName . '.png',
         'prompt_used' => $description,
     ]);
     exit;

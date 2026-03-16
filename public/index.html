@@ -124,8 +124,10 @@
     #controls {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 16px;
       margin-bottom: 16px;
+      width: var(--panel);
     }
 
     button {
@@ -240,6 +242,22 @@
     }
     #upload-desc:focus { outline: none; border-color: #6a5a3a; }
     #upload-desc::placeholder { color: #3a3020; }
+    #upload-hidden-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: #7a6a4a;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      user-select: none;
+    }
+    #upload-hidden-label input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #7a6a4a;
+      cursor: pointer;
+    }
 
     #timer {
       font-size: 2rem;
@@ -519,7 +537,7 @@
 <div id="controls">
   <button id="btn-start" disabled>&#9679; Start Listen</button>
   <button id="btn-cancel" style="display:none">&#10005; I Changed My Mind</button>
-  <span id="timer" style="visibility:hidden">0:00</span>
+  <span id="timer" style="display:none">0:00</span>
   <button id="btn-submit" style="display:none">&#10024; Do The Magic</button>
 </div>
 
@@ -536,6 +554,10 @@
   <textarea id="upload-desc" placeholder="Description (optional)"></textarea>
   <button id="btn-upload-submit" disabled>&#8679; Add to Gallery</button>
 </div>
+
+<label id="upload-hidden-label">
+  <input type="checkbox" id="upload-hidden"> Hide from players
+</label>
 
 <div id="status">Checking prerequisites...</div>
 <div id="timing"></div>
@@ -624,6 +646,7 @@ const uploadDrop       = document.getElementById('upload-drop');
 const uploadDropLabel  = document.getElementById('upload-drop-label');
 const uploadFile       = document.getElementById('upload-file');
 const uploadDesc       = document.getElementById('upload-desc');
+const uploadHidden     = document.getElementById('upload-hidden');
 const btnUploadSubmit  = document.getElementById('btn-upload-submit');
 
 // ============================================================
@@ -782,7 +805,7 @@ async function startRecording() {
   btnStart.style.display  = 'none';
   btnCancel.style.display = '';
   btnSubmit.style.display = '';
-  timerEl.style.visibility = 'visible';
+  timerEl.style.display = 'inline';
   timerEl.classList.add('recording');
   startElapsed();
 }
@@ -792,7 +815,7 @@ function cancelRecording() {
   stopElapsed();
   if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
   timerEl.classList.remove('recording');
-  timerEl.style.visibility = 'hidden';
+  timerEl.style.display = 'none';
   setStatus('');
 }
 
@@ -802,7 +825,7 @@ function submitRecording() {
   btnCancel.style.display  = 'none';
   btnSubmit.style.display  = 'none';
   timerEl.classList.remove('recording');
-  timerEl.style.visibility = 'hidden';
+  timerEl.style.display = 'none';
 }
 
 function startElapsed() {
@@ -889,6 +912,7 @@ async function handleRecordingComplete() {
   formData2.append('base_prompt',  basePromptEl.value.trim());
   formData2.append('scene',        transcribeResult.transcription);
   formData2.append('size',         imageSize);
+  formData2.append('hidden',       uploadHidden.checked ? '1' : '0');
 
   let genResult;
   try {
@@ -907,7 +931,7 @@ async function handleRecordingComplete() {
   clearInterval(liveTimer2);
   const t2 = Date.now();
   hideSteps();
-  displayImage(genResult.image_url, genResult.prompt_used);
+  displayImage(genResult.image_url, genResult.prompt_used, uploadHidden.checked);
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -1011,8 +1035,8 @@ async function handleUpload() {
   stepTranscribe.style.display = 'none';
   stepGenerate.className       = 'step active';
 
-  const desc = uploadDesc.value.trim();
-  let lastResult = null;
+  const desc   = uploadDesc.value.trim();
+  const hidden = uploadHidden.checked;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -1022,13 +1046,13 @@ async function handleUpload() {
     fd.append('action',      'upload');
     fd.append('image',       file, file.name);
     fd.append('description', desc);
+    fd.append('hidden',      hidden ? '1' : '0');
 
     try {
       const resp = await fetch('/api.php', { method: 'POST', body: fd });
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error ?? `HTTP ${resp.status}`);
-      displayImage(result.image_url, result.prompt_used);
-      lastResult = result;
+      displayImage(result.image_url, result.prompt_used, hidden);
     } catch (err) {
       hideSteps();
       setStatus(`Upload failed (${file.name}): ` + err.message, true);
@@ -1041,8 +1065,9 @@ async function handleUpload() {
   hideSteps();
   setStatus(files.length > 1 ? `${files.length} images added to gallery.` : 'Image added to gallery.');
 
-  uploadFile.value = '';
-  uploadDesc.value = '';
+  uploadFile.value    = '';
+  uploadDesc.value    = '';
+  uploadHidden.checked = false;
   updateDropLabel();
   isGenerating = false;
   updateUploadButton();
@@ -1074,6 +1099,7 @@ async function handleTextSubmit() {
   fd.append('base_prompt', basePrompt);
   fd.append('scene',       sceneText);
   fd.append('size',        imageSize);
+  fd.append('hidden',      uploadHidden.checked ? '1' : '0');
 
   let genResult;
   try {
@@ -1092,7 +1118,7 @@ async function handleTextSubmit() {
   clearInterval(liveTimerText);
   const tGen1 = Date.now();
   hideSteps();
-  displayImage(genResult.image_url, genResult.prompt_used);
+  displayImage(genResult.image_url, genResult.prompt_used, uploadHidden.checked);
 
   costImage.textContent    = '$' + genResult.cost_image.toFixed(3);
   costSession.textContent  = '$' + genResult.cost_session.toFixed(3);
@@ -1139,9 +1165,9 @@ function hideSteps() {
 // ============================================================
 // Image display with fade
 // ============================================================
-function displayImage(url, prompt = '') {
-  const thumb = addThumb(url, prompt, true); // prepend — new images go to the front
-  selectThumb(thumb, url, prompt, true);     // slow fade for freshly generated images
+function displayImage(url, prompt = '', isHidden = false) {
+  const thumb = addThumb(url, prompt, true, isHidden); // prepend — new images go to the front
+  selectThumb(thumb, url, prompt, true);               // slow fade for freshly generated images
 }
 
 function addThumb(url, prompt = '', prepend = false, isHidden = false) {
