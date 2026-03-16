@@ -14,12 +14,16 @@ define('WHISPER_TIMEOUT_S',  120);     // seconds before transcription is killed
 define('OPENAI_TIMEOUT_S',   120);     // seconds before DALL-E request is aborted
 
 // Hidden guardrails appended to every prompt — not shown in UI
-define('PROMPT_GUARDRAILS',
-    'Render this as a first-person perspective view — exactly what the hero sees through their own eyes, ' .
-    'fully immersed in the scene. No frames, no borders, no vignettes, no painting edges, no decorative ' .
-    'elements, no picture-on-a-wall effect. Fill the entire image edge to edge. No text overlays, no UI, ' .
-    'no fourth-wall breaks. The image must feel like standing inside the world, not looking at artwork.'
-);
+const PROMPT_GUARDRAILS = 'The scene is viewed naturally through human eyes.
+
+    This is a real environment, not an artwork, not a cinematic frame.
+    No stylized illustration.
+    No dramatic film composition.
+    
+    No borders, no text, no subtitles, no UI elements.
+    No watermarks.
+    
+    Everything appears physically present and grounded in reality.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -400,15 +404,15 @@ function buildPrompt(string $style, string $scene): string
 {
     $parts = [];
 
+    if ($scene !== '') {
+        $parts[] = $scene;
+    }
+
     if ($style !== '') {
         $parts[] = $style;
     }
 
-    if ($scene !== '') {
-        $parts[] = "Scene to depict: {$scene}";
-    }
-
-//    $parts[] = PROMPT_GUARDRAILS;
+    $parts[] = PROMPT_GUARDRAILS;
 
     return implode("\n\n", $parts);
 }

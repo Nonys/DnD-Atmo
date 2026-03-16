@@ -11,7 +11,7 @@
     h1 a { margin-bottom: 6px; }
     body { padding-bottom: 36px; }
 
-    #image-frame { width: min(calc(100vw - 32px), 500px); }
+    #image-frame { width: var(--panel); }
 
     /* ---- Prompt display (dm overrides) ---- */
     #prompt-display { width: var(--panel); margin-top: 10px; margin-bottom: 0; }
@@ -1206,8 +1206,9 @@ function displayImage(url, prompt = '', isHidden = false) {
   // Mark as active in carousel (for gallery tab)
   galleryCarousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
   thumb.classList.add('active');
-  // Show in generate tab's image-frame
+  // Show in generate tab's image-frame and scroll into view
   showInGenerateFrame(url, true);
+  imageFrame.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function showInGenerateFrame(url, slow = false) {
