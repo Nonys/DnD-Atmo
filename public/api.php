@@ -40,7 +40,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery
         rsort($days); // newest day first
         foreach ($days as $dayDir) {
             $date  = basename($dayDir);
-            $files = glob($dayDir . '/image_*.png') ?: [];
+            $files = array_merge(
+                glob($dayDir . '/image_*.jpg') ?: [],
+                glob($dayDir . '/image_*.png') ?: []
+            );
+            rsort($files);
             rsort($files); // newest image within day first
             foreach ($files as $imgPath) {
                 $name       = pathinfo($imgPath, PATHINFO_FILENAME);
@@ -219,9 +223,12 @@ if ($action === 'generate') {
     }
 
     $imageName = nextImageName($sessionDir);
-    $imagePath = "$sessionDir/$imageName.png";
+    $imagePath = "$sessionDir/$imageName.jpg";
 
-    file_put_contents($imagePath, base64_decode($imageB64));
+    $tmpPng = tempnam(sys_get_temp_dir(), 'dnd_') . '.png';
+    file_put_contents($tmpPng, base64_decode($imageB64));
+    exec(sprintf('ffmpeg -y -i %s -q:v 3 %s 2>/dev/null', escapeshellarg($tmpPng), escapeshellarg($imagePath)));
+    @unlink($tmpPng);
 
     // Also save the prompt alongside the image
     file_put_contents("$sessionDir/$imageName.txt", $finalPrompt);
@@ -242,7 +249,7 @@ if ($action === 'generate') {
     saveCosts($costs);
 
     echo json_encode([
-        'image_url'     => '/sessions/' . $today . '/' . $imageName . '.png',
+        'image_url'     => '/sessions/' . $today . '/' . $imageName . '.jpg',
         'prompt_used'   => $finalPrompt,
         'cost_image'    => $costImage,
         'cost_session'  => $costs['session_cost'],
@@ -283,29 +290,19 @@ if ($action === 'upload') {
     }
 
     $imageName = nextImageName($sessionDir);
-    $imagePath = "$sessionDir/$imageName.png";
+    $imagePath = "$sessionDir/$imageName.jpg";
 
-    // Convert to PNG if needed, otherwise copy to destination
-    if ($mime === 'image/png') {
-        if (!copy($imageFile['tmp_name'], $imagePath)) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to save uploaded image']);
-            exit;
-        }
-        @unlink($imageFile['tmp_name']);
-    } else {
-        $cmd = sprintf(
-            'ffmpeg -y -i %s -frames:v 1 -update 1 %s 2>/dev/null',
-            escapeshellarg($imageFile['tmp_name']),
-            escapeshellarg($imagePath)
-        );
-        exec($cmd, $out, $rc);
-        @unlink($imageFile['tmp_name']);
-        if ($rc !== 0 || !file_exists($imagePath)) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Image conversion failed']);
-            exit;
-        }
+    $cmd = sprintf(
+        'ffmpeg -y -i %s -frames:v 1 -q:v 3 %s 2>/dev/null',
+        escapeshellarg($imageFile['tmp_name']),
+        escapeshellarg($imagePath)
+    );
+    exec($cmd, $out, $rc);
+    @unlink($imageFile['tmp_name']);
+    if ($rc !== 0 || !file_exists($imagePath)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Image conversion failed']);
+        exit;
     }
 
     if ($description !== '') {
@@ -316,7 +313,7 @@ if ($action === 'upload') {
     }
 
     echo json_encode([
-        'image_url'   => '/sessions/' . $today . '/' . $imageName . '.png',
+        'image_url'   => '/sessions/' . $today . '/' . $imageName . '.jpg',
         'prompt_used' => $description,
     ]);
     exit;
@@ -338,7 +335,7 @@ if ($action === 'toggle_hidden') {
         exit;
     }
 
-    $hiddenFile = preg_replace('/\.png$/', '.hidden', $path);
+    $hiddenFile = preg_replace('/\.(jpg|png)$/', '.hidden', $path);
     if (file_exists($hiddenFile)) {
         @unlink($hiddenFile);
         echo json_encode(['hidden' => false]);
@@ -366,8 +363,8 @@ if ($action === 'delete') {
     }
 
     @unlink($path);
-    @unlink(preg_replace('/\.png$/', '.txt',    $path));
-    @unlink(preg_replace('/\.png$/', '.hidden', $path));
+    @unlink(preg_replace('/\.(jpg|png)$/', '.txt',    $path));
+    @unlink(preg_replace('/\.(jpg|png)$/', '.hidden', $path));
 
     echo json_encode(['ok' => true]);
     exit;
@@ -383,10 +380,13 @@ echo json_encode(['error' => 'Unknown action']);
 
 function nextImageName(string $sessionDir): string
 {
-    $existing = glob($sessionDir . '/image_*.png') ?: [];
+    $existing = array_merge(
+        glob($sessionDir . '/image_*.jpg') ?: [],
+        glob($sessionDir . '/image_*.png') ?: []
+    );
     $max = 0;
     foreach ($existing as $f) {
-        if (preg_match('/image_(\d+)\.png$/', $f, $m)) {
+        if (preg_match('/image_(\d+)\.(jpg|png)$/', $f, $m)) {
             $max = max($max, (int) $m[1]);
         }
     }

@@ -17,6 +17,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx-entrypoint.sh:/entrypoint.sh:ro
       - https_certs:/etc/nginx/certs
+      - ./public/sessions:/sessions:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     restart: unless-stopped
 
