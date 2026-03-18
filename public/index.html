@@ -122,12 +122,16 @@ async function init() {
     return;
   }
 
-  // Use first IP for QR codes; fall back to current hostname
-  const host = ips.length > 0 ? ips[0] : location.hostname;
-  const base = `http://${host}:8080`;
+  // If opened via localhost, redirect to the LAN IP so all relative links use it
+  if (ips.length > 0 && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    location.replace(`http://${ips[0]}:8080/`);
+    return;
+  }
 
-  const playerUrl = `${base}/player.html`;
-  const dmUrl     = `${base}/dm.html`;
+  const host = ips.length > 0 ? ips[0] : location.hostname;
+
+  const playerUrl = `http://${host}:8080/player.html`;
+  const dmUrl     = `https://${host}:8443/dm.html`;
 
   new QRCode(document.getElementById('qr-player'), {
     text: playerUrl, width: 180, height: 180,
@@ -140,6 +144,9 @@ async function init() {
 
   document.getElementById('url-player').textContent = playerUrl;
   document.getElementById('url-dm').textContent     = dmUrl;
+
+  document.getElementById('card-player').href = playerUrl;
+  document.getElementById('card-dm').href     = dmUrl;
 
   msgEl.style.display = 'none';
 }

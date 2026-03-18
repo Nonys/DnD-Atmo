@@ -274,6 +274,10 @@
       text-align: center;
     }
     #status.error { color: #d46a6a; }
+    #upload-status { min-height: 1.4em; font-size: 0.85rem; color: #9a8a6a; letter-spacing: 0.06em; margin-top: 8px; text-align: center; }
+    #upload-status.error { color: #d46a6a; }
+    #gallery-status { min-height: 1.4em; font-size: 0.85rem; color: #9a8a6a; letter-spacing: 0.06em; margin-bottom: 8px; text-align: center; }
+    #gallery-status.error { color: #d46a6a; }
     #timing {
       min-height: 1.2em;
       font-size: 0.72rem;
@@ -444,9 +448,11 @@
       letter-spacing: 0;
       text-transform: none;
       cursor: pointer;
+      touch-action: manipulation;
     }
     .btn-del:hover { background: #2a0a0a; border-color: #aa5a5a; }
     .thumb-wrap:hover .btn-del { display: block; }
+    @media (pointer: coarse) { .thumb-wrap .btn-del { display: block; width: 28px; height: 28px; } }
 
     .btn-hide {
       display: none;
@@ -462,9 +468,11 @@
       letter-spacing: 0;
       text-transform: none;
       cursor: pointer;
+      touch-action: manipulation;
     }
     .btn-hide:hover { background: #181508; border-color: #9a8a5a; color: #c0aa70; }
     .thumb-wrap:hover .btn-hide { display: block; }
+    @media (pointer: coarse) { .thumb-wrap .btn-hide { display: block; width: 28px; height: 28px; } }
     .thumb-wrap.hidden .btn-hide { display: block; } /* always visible when hidden */
     .thumb-wrap.hidden .thumb { opacity: 0.25; filter: grayscale(40%); }
     .thumb-wrap.hidden .thumb:hover,
@@ -597,6 +605,7 @@
     <input type="checkbox" id="upload-hidden"> Hide from players
   </label>
   <button id="btn-upload-submit" disabled>&#8679; Add to Gallery</button>
+  <div id="upload-status"></div>
 </div>
 
 </div><!-- #tab-upload -->
@@ -604,6 +613,7 @@
 <div id="tab-gallery">
 
 <div id="gallery-carousel"></div>
+<div id="gallery-status"></div>
 
 <div id="gallery-frame">
   <div id="gallery-placeholder">Select an image...</div>
@@ -689,6 +699,16 @@ uploadHidden.addEventListener('change',    () => { uploadHiddenGen.checked = upl
 uploadHiddenGen.addEventListener('change', () => { uploadHidden.checked = uploadHiddenGen.checked; });
 function isHideChecked() { return uploadHidden.checked; }
 const btnUploadSubmit  = document.getElementById('btn-upload-submit');
+const uploadStatusEl   = document.getElementById('upload-status');
+function setUploadStatus(msg, isError = false) {
+  uploadStatusEl.textContent = msg;
+  uploadStatusEl.className = isError ? 'error' : '';
+}
+const galleryStatusEl  = document.getElementById('gallery-status');
+function setGalleryStatus(msg, isError = false) {
+  galleryStatusEl.textContent = msg;
+  galleryStatusEl.className = isError ? 'error' : '';
+}
 
 // ============================================================
 // Pre-flight checks (run on load)
@@ -1077,7 +1097,7 @@ async function handleUpload() {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    setStatus(files.length > 1 ? `Uploading ${i + 1} / ${files.length}...` : 'Uploading image...');
+    setUploadStatus(files.length > 1 ? `Uploading ${i + 1} / ${files.length}...` : 'Uploading image...');
 
     const fd = new FormData();
     fd.append('action',      'upload');
@@ -1092,7 +1112,7 @@ async function handleUpload() {
       displayImage(result.image_url, result.prompt_used, hidden);
     } catch (err) {
       hideSteps();
-      setStatus(`Upload failed (${file.name}): ` + err.message, true);
+      setUploadStatus(`Upload failed (${file.name}): ` + err.message, true);
       isGenerating = false;
       updateUploadButton();
       return;
@@ -1100,7 +1120,7 @@ async function handleUpload() {
   }
 
   hideSteps();
-  setStatus(files.length > 1 ? `${files.length} images added to gallery.` : 'Image added to gallery.');
+  setUploadStatus(files.length > 1 ? `${files.length} images added to gallery.` : 'Image added to gallery.');
 
   uploadFile.value    = '';
   uploadDesc.value    = '';
@@ -1248,27 +1268,25 @@ function addThumb(url, prompt = '', prepend = false, isHidden = false) {
 
   wrap.appendChild(img);
 
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    const hideBtn = document.createElement('button');
-    hideBtn.className = 'btn-hide';
-    hideBtn.textContent = isHidden ? '●' : '◎';
-    hideBtn.title = isHidden ? 'Show to players' : 'Hide from players';
-    hideBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleHidden(wrap, url, hideBtn);
-    });
-    wrap.appendChild(hideBtn);
+  const hideBtn = document.createElement('button');
+  hideBtn.className = 'btn-hide';
+  hideBtn.textContent = isHidden ? '●' : '◎';
+  hideBtn.title = isHidden ? 'Show to players' : 'Hide from players';
+  hideBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleHidden(wrap, url, hideBtn);
+  });
+  wrap.appendChild(hideBtn);
 
-    const del = document.createElement('button');
-    del.className = 'btn-del';
-    del.textContent = '×';
-    del.title = 'Delete image';
-    del.addEventListener('click', e => {
-      e.stopPropagation();
-      deleteImage(wrap, img, url);
-    });
-    wrap.appendChild(del);
-  }
+  const del = document.createElement('button');
+  del.className = 'btn-del';
+  del.textContent = '×';
+  del.title = 'Delete image';
+  del.addEventListener('click', e => {
+    e.stopPropagation();
+    deleteImage(wrap, img, url);
+  });
+  wrap.appendChild(del);
 
   if (prepend && galleryCarousel.firstChild) {
     galleryCarousel.insertBefore(wrap, galleryCarousel.firstChild);
@@ -1293,7 +1311,7 @@ async function toggleHidden(wrap, url, btn) {
     btn.textContent = nowHidden ? '●' : '◎';
     btn.title = nowHidden ? 'Show to players' : 'Hide from players';
   } catch (e) {
-    setStatus('Toggle failed: ' + e.message, true);
+    setGalleryStatus('Toggle failed: ' + e.message, true);
   }
 }
 
@@ -1309,7 +1327,7 @@ async function deleteImage(wrap, img, url) {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error);
   } catch (e) {
-    setStatus('Delete failed: ' + e.message, true);
+    setGalleryStatus('Delete failed: ' + e.message, true);
     return;
   }
 
@@ -1365,7 +1383,7 @@ function selectThumb(thumbEl, url, prompt, slow = false) {
 // ============================================================
 async function loadGallery() {
   try {
-    const resp = await fetch('/api.php?action=gallery');
+    const resp = await fetch('/api.php?action=gallery&dm=1');
     const data = await resp.json();
     if (!data.images || data.images.length === 0) return;
 
@@ -1475,6 +1493,7 @@ function switchTab(tab) {
     document.getElementById('btn-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
+  if (tab !== 'upload') setUploadStatus('');
   location.replace('#' + (tab === 'generate' ? 'generate-' + currentMode : tab));
 }
 
