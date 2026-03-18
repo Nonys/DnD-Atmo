@@ -40,12 +40,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'gallery
         rsort($days); // newest day first
         foreach ($days as $dayDir) {
             $date  = basename($dayDir);
-            $files = array_merge(
+            $allFiles = array_merge(
                 glob($dayDir . '/image_*.jpg') ?: [],
                 glob($dayDir . '/image_*.png') ?: []
             );
-            rsort($files);
-            rsort($files); // newest image within day first
+
+            // Apply custom order if it exists
+            $orderFile = $dayDir . '/order.json';
+            if (file_exists($orderFile)) {
+                $order = json_decode(file_get_contents($orderFile), true) ?: [];
+                $byName = [];
+                foreach ($allFiles as $f) $byName[basename($f)] = $f;
+                $files = [];
+                foreach ($order as $name) {
+                    if (isset($byName[$name])) {
+                        $files[] = $byName[$name];
+                        unset($byName[$name]);
+                    }
+                }
+                // New images not yet in order.json go at the front
+                $remaining = array_values($byName);
+                rsort($remaining);
+                $files = array_merge($remaining, $files);
+            } else {
+                $files = $allFiles;
+                rsort($files);
+            }
+
             foreach ($files as $imgPath) {
                 $name       = pathinfo($imgPath, PATHINFO_FILENAME);
                 $hiddenPath = $dayDir . '/' . $name . '.hidden';
@@ -365,6 +386,38 @@ if ($action === 'delete') {
     @unlink($path);
     @unlink(preg_replace('/\.(jpg|png)$/', '.txt',    $path));
     @unlink(preg_replace('/\.(jpg|png)$/', '.hidden', $path));
+
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+// ============================================================
+// Action: save_order
+// Receives: urls (JSON array of /sessions/DATE/FILE paths)
+// Returns:  { ok: true }
+// ============================================================
+if ($action === 'save_order') {
+    $urls = json_decode($_POST['urls'] ?? '[]', true);
+    if (!is_array($urls)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid urls']);
+        exit;
+    }
+
+    // Group filenames by day
+    $byDay = [];
+    foreach ($urls as $url) {
+        if (preg_match('#^/sessions/(\d{4}-\d{2}-\d{2})/([^/]+)$#', $url, $m)) {
+            $byDay[$m[1]][] = $m[2];
+        }
+    }
+
+    foreach ($byDay as $date => $names) {
+        $dayDir = SESSIONS_DIR . '/' . $date;
+        if (is_dir($dayDir)) {
+            file_put_contents($dayDir . '/order.json', json_encode($names));
+        }
+    }
 
     echo json_encode(['ok' => true]);
     exit;

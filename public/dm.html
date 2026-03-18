@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DnD Atmosphere Generator</title>
   <link rel="stylesheet" href="/theme.css">
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js"></script>
 <style>
     :root { --panel: min(720px, calc(100vw - 32px)); }
 
@@ -1348,6 +1349,7 @@ async function deleteImage(wrap, img, url) {
   }
 
   wrap.remove();
+  saveOrder();
 }
 
 function selectThumb(thumbEl, url, prompt, slow = false) {
@@ -1387,12 +1389,34 @@ async function loadGallery() {
     const data = await resp.json();
     if (!data.images || data.images.length === 0) return;
 
-    data.images.forEach(item => addThumb(item.url, item.prompt, false, item.hidden ?? false)); // append; API returns newest-first
-    // Auto-select the first (newest) image in the gallery frame
+    data.images.forEach(item => addThumb(item.url, item.prompt, false, item.hidden ?? false));
     const first = galleryCarousel.querySelector('.thumb');
     if (first) selectThumb(first, first.src, first.dataset.prompt || '');
   } catch (_) {
     // non-critical — silently ignore
+  }
+  initSortable();
+}
+
+function initSortable() {
+  Sortable.create(galleryCarousel, {
+    animation: 150,
+    delay: 200,
+    delayOnTouchOnly: true,
+    onEnd: saveOrder,
+  });
+}
+
+async function saveOrder() {
+  const urls = [...galleryCarousel.querySelectorAll('.thumb')]
+    .map(t => new URL(t.src).pathname);
+  const fd = new FormData();
+  fd.append('action', 'save_order');
+  fd.append('urls', JSON.stringify(urls));
+  try {
+    await fetch('/api.php', { method: 'POST', body: fd });
+  } catch (e) {
+    setGalleryStatus('Failed to save order: ' + e.message, true);
   }
 }
 
