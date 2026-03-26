@@ -1,4 +1,6 @@
-/* Shared base styles for dm.html and player.html */
+/* Shared base styles */
+
+:root { --panel: min(720px, calc(100vw - 32px)); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -87,6 +89,30 @@ h1 a:hover { opacity: 1; }
 
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
+/* ---- DM navigation bar ---- */
+#dm-nav {
+  display: flex;
+  border: 1px solid #3a3020;
+  width: var(--panel);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+#dm-nav a {
+  flex: 1;
+  padding: 7px 0;
+  font-family: 'Georgia', serif;
+  font-size: 0.78rem;
+  background: #111008;
+  color: #4a3f2a;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  text-align: center;
+  transition: background 0.2s, color 0.2s;
+}
+#dm-nav a:hover:not(.active) { background: #191510; color: #9a8a6a; }
+#dm-nav a.active { background: #1f1a10; color: #e8d5a3; }
+
 /* ---- Toast notifications ---- */
 #toast-container {
   position: fixed;
@@ -135,3 +161,13 @@ h1 a:hover { opacity: 1; }
   font-family: inherit;
 }
 .toast-close:hover { opacity: 1; }
+
+.toast-link {
+  font-size: 0.78rem;
+  color: inherit;
+  opacity: 0.8;
+  text-decoration: underline;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.toast-link:hover { opacity: 1; }

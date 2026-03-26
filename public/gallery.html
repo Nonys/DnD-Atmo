@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gallery — DnD Atmosphere</title>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/shared.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js"></script>
+<style>
+  body { padding-bottom: 20px; }
+
+  /* ---- Carousel ---- */
+  #gallery-carousel {
+    width: var(--panel);
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3020 #0d0d0f;
+  }
+  #gallery-carousel::-webkit-scrollbar { height: 4px; }
+  #gallery-carousel::-webkit-scrollbar-track { background: #0d0d0f; }
+  #gallery-carousel::-webkit-scrollbar-thumb { background: #3a3020; }
+
+  .thumb-wrap { position: relative; flex-shrink: 0; width: 100px; height: 100px; scroll-snap-align: start; }
+  .thumb {
+    width: 100px; height: 100px;
+    object-fit: cover;
+    border: 1px solid #2a2518;
+    cursor: pointer;
+    opacity: 0.65;
+    transition: opacity 0.2s, border-color 0.2s, transform 0.12s;
+  }
+  .thumb:hover, .thumb.active { opacity: 1; border-color: #7a6a4a; }
+  .thumb:active { transform: scale(0.88); }
+
+  /* ---- Thumb action buttons ---- */
+  .btn-del, .btn-hide {
+    display: none;
+    position: absolute;
+    width: 20px; height: 20px;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    border: 1px solid;
+    font-family: inherit;
+  }
+  .btn-del { top: 3px; right: 3px; background: rgba(15,5,5,0.88); border-color: #7a3a3a; color: #d46a6a; }
+  .btn-del:hover { background: #2a0a0a; border-color: #aa5a5a; }
+  .btn-hide { top: 3px; left: 3px; background: rgba(15,5,5,0.88); border-color: #4a4030; color: #8a7a5a; }
+  .btn-hide:hover { background: #181508; border-color: #9a8a5a; color: #c0aa70; }
+
+  .thumb-wrap:hover .btn-del,
+  .thumb-wrap:hover .btn-hide { display: block; }
+  @media (pointer: coarse) {
+    .thumb-wrap .btn-del,
+    .thumb-wrap .btn-hide { display: block; width: 28px; height: 28px; }
+  }
+  .thumb-wrap.hidden .btn-hide { display: block; }
+  .thumb-wrap.hidden .thumb { opacity: 0.25; filter: grayscale(40%); }
+  .thumb-wrap.hidden .thumb:hover,
+  .thumb-wrap.hidden .thumb.active { opacity: 0.55; }
+
+  /* ---- Status ---- */
+  #gallery-status { min-height: 1.2em; font-size: 0.78rem; color: #5a5040; letter-spacing: 0.06em; margin-bottom: 8px; text-align: center; }
+
+  /* ---- Big frame ---- */
+  #gallery-frame {
+    width: var(--panel);
+    position: relative;
+    aspect-ratio: 1;
+    background: #1a1710;
+    border: 1px solid #3a3020;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: aspect-ratio 0.4s ease;
+  }
+  #gallery-current, #gallery-prev {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  }
+  #gallery-current { opacity: 0; transition: opacity 0.5s ease; z-index: 2; }
+  #gallery-current.visible { opacity: 1; cursor: zoom-in; }
+  #gallery-prev { opacity: 0; z-index: 1; transition: opacity 0.5s ease; }
+  #gallery-placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #4a3f2a; font-size: 0.9rem; letter-spacing: 0.1em; z-index: 0;
+  }
+
+  /* ---- Prompt display ---- */
+  #prompt-display { display: none; width: var(--panel); margin-bottom: 16px; }
+  #prompt-display label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5a5040;
+    margin-bottom: 5px;
+  }
+  #prompt-text {
+    background: #0f0e0a;
+    border: 1px solid #2a2518;
+    color: #7a6a4a;
+    font-size: 0.8rem;
+    padding: 8px 10px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 200px;
+  }
+</style>
+</head>
+<body>
+
+<h1><a href="/">DnD Atmosphere</a></h1>
+
+<nav id="dm-nav">
+  <a href="/generate.html">&#9881; Generate</a>
+  <a href="/upload.html">&#8679; Upload</a>
+  <a href="/gallery.html" class="active">&#9783; Gallery</a>
+  <a href="/logs.html">&#9776; Logs</a>
+</nav>
+
+<div id="gallery-carousel"></div>
+<div id="gallery-status"></div>
+
+<div id="gallery-frame">
+  <div id="gallery-placeholder">Select an image...</div>
+  <img id="gallery-prev"    src="" alt="">
+  <img id="gallery-current" src="" alt="">
+</div>
+
+<div id="prompt-display">
+  <label>Prompt used</label>
+  <div id="prompt-text"></div>
+</div>
+
+<script>
+const carousel    = document.getElementById('gallery-carousel');
+const frame       = document.getElementById('gallery-frame');
+const currentImg  = document.getElementById('gallery-current');
+const prevImg     = document.getElementById('gallery-prev');
+const placeholder = document.getElementById('gallery-placeholder');
+const promptDisplay = document.getElementById('prompt-display');
+const promptText    = document.getElementById('prompt-text');
+const statusEl      = document.getElementById('gallery-status');
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+// ============================================================
+// Load gallery
+// ============================================================
+async function loadGallery() {
+  try {
+    const resp = await fetch('/api.php?action=gallery&dm=1');
+    const data = await resp.json();
+    if (!data.images || data.images.length === 0) { setStatus('No images yet.'); return; }
+    data.images.forEach(item => addThumb(item.url, item.prompt, false, item.hidden ?? false));
+    const first = carousel.querySelector('.thumb');
+    if (first) selectThumb(first, first.src, first.dataset.prompt || '');
+  } catch (e) {
+    showToast('Failed to load gallery: ' + e.message, 'error');
+  }
+  initSortable();
+}
+
+// ============================================================
+// Thumbnail management
+// ============================================================
+function addThumb(url, prompt, prepend, isHidden) {
+  const wrap = document.createElement('div');
+  wrap.className = 'thumb-wrap' + (isHidden ? ' hidden' : '');
+
+  const img = document.createElement('img');
+  img.src           = url;
+  img.loading       = 'lazy';
+  img.className     = 'thumb';
+  img.dataset.prompt = prompt;
+  img.addEventListener('click', () => selectThumb(img, url, prompt));
+  wrap.appendChild(img);
+
+  const hideBtn = document.createElement('button');
+  hideBtn.className   = 'btn-hide';
+  hideBtn.textContent = isHidden ? '●' : '◎';
+  hideBtn.title       = isHidden ? 'Show to players' : 'Hide from players';
+  hideBtn.addEventListener('click', e => { e.stopPropagation(); toggleHidden(wrap, url, hideBtn); });
+  wrap.appendChild(hideBtn);
+
+  const delBtn = document.createElement('button');
+  delBtn.className   = 'btn-del';
+  delBtn.textContent = '×';
+  delBtn.title       = 'Delete image';
+  delBtn.addEventListener('click', e => { e.stopPropagation(); deleteImage(wrap, img, url); });
+  wrap.appendChild(delBtn);
+
+  if (prepend && carousel.firstChild) {
+    carousel.insertBefore(wrap, carousel.firstChild);
+    carousel.scrollLeft = 0;
+  } else {
+    carousel.appendChild(wrap);
+  }
+  return img;
+}
+
+function selectThumb(thumbEl, url, prompt) {
+  carousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+  thumbEl.classList.add('active');
+  placeholder.style.display = 'none';
+
+  if (currentImg.classList.contains('visible') && currentImg.src !== url) {
+    prevImg.src = currentImg.src;
+    prevImg.style.opacity = '1';
+    prevImg.offsetHeight;
+    prevImg.style.opacity = '0';
+  }
+
+  currentImg.classList.remove('visible');
+  currentImg.src = url;
+  currentImg.onload = () => {
+    frame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
+    currentImg.classList.add('visible');
+  };
+
+  if (prompt) {
+    promptText.textContent      = prompt;
+    promptDisplay.style.display = 'block';
+  } else {
+    promptDisplay.style.display = 'none';
+  }
+}
+
+currentImg.addEventListener('click', () => {
+  if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
+});
+
+// ============================================================
+// Hide / delete
+// ============================================================
+async function toggleHidden(wrap, url, btn) {
+  const fd = new FormData();
+  fd.append('action', 'toggle_hidden');
+  fd.append('url', url);
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    wrap.classList.toggle('hidden', data.hidden);
+    btn.textContent = data.hidden ? '●' : '◎';
+    btn.title       = data.hidden ? 'Show to players' : 'Hide from players';
+  } catch (e) {
+    showToast('Toggle failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteImage(wrap, img, url) {
+  if (!confirm('Delete this image?')) return;
+  const fd = new FormData();
+  fd.append('action', 'delete');
+  fd.append('url', url);
+  try {
+    const resp = await fetch('/api.php', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+  } catch (e) {
+    showToast('Delete failed: ' + e.message, 'error');
+    return;
+  }
+
+  const wasActive = img.classList.contains('active');
+  if (wasActive) {
+    const allWraps = [...carousel.querySelectorAll('.thumb-wrap')];
+    const idx      = allWraps.indexOf(wrap);
+    const next     = allWraps[idx + 1] || allWraps[idx - 1];
+    if (next) {
+      const nextImg = next.querySelector('.thumb');
+      selectThumb(nextImg, nextImg.src, nextImg.dataset.prompt || '');
+    } else {
+      currentImg.classList.remove('visible');
+      currentImg.src = '';
+      placeholder.style.display = 'flex';
+      promptDisplay.style.display = 'none';
+    }
+  }
+  wrap.remove();
+  saveOrder();
+}
+
+// ============================================================
+// Drag & drop reorder
+// ============================================================
+function initSortable() {
+  Sortable.create(carousel, {
+    animation: 150,
+    delay: 200,
+    delayOnTouchOnly: true,
+    onEnd: saveOrder,
+  });
+}
+
+async function saveOrder() {
+  const urls = [...carousel.querySelectorAll('.thumb')].map(t => new URL(t.src).pathname);
+  const fd   = new FormData();
+  fd.append('action', 'save_order');
+  fd.append('urls',   JSON.stringify(urls));
+  try {
+    await fetch('/api.php', { method: 'POST', body: fd });
+  } catch (e) {
+    showToast('Failed to save order: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// Boot
+// ============================================================
+loadGallery();
+</script>
+
+</body>
+</html>

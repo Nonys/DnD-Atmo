@@ -7,25 +7,16 @@
   <link rel="stylesheet" href="/theme.css">
   <script src="/shared.js"></script>
 <style>
+  :root { --panel: min(760px, calc(100vw - 32px)); }
   body { padding-bottom: 40px; }
 
   #toolbar {
-    width: min(760px, calc(100vw - 32px));
+    width: var(--panel);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    gap: 16px;
+    justify-content: flex-end;
+    margin-bottom: 8px;
   }
-
-  #toolbar a {
-    font-size: 0.78rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #5a5040;
-    text-decoration: none;
-  }
-  #toolbar a:hover { color: #9a8a6a; }
 
   #btn-refresh {
     padding: 5px 16px;
@@ -41,7 +32,7 @@
   #btn-refresh:hover { border-color: #7a6a4a; color: #c9b99a; }
 
   #log-list {
-    width: min(760px, calc(100vw - 32px));
+    width: var(--panel);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -53,6 +44,7 @@
     padding: 12px 14px;
     display: grid;
     grid-template-columns: auto 1fr;
+    width: var(--panel);
     gap: 6px 14px;
     font-size: 0.82rem;
     line-height: 1.5;
@@ -167,8 +159,14 @@
 
 <h1><a href="/">DnD Atmosphere</a></h1>
 
+<nav id="dm-nav">
+  <a href="/generate.html">&#9881; Generate</a>
+  <a href="/upload.html">&#8679; Upload</a>
+  <a href="/gallery.html">&#9783; Gallery</a>
+  <a href="/logs.html" class="active">&#9776; Logs</a>
+</nav>
+
 <div id="toolbar">
-  <a href="/dm.html">&#8592; Back to DM</a>
   <button id="btn-refresh">&#8635; Refresh</button>
 </div>
 

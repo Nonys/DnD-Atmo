@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate — DnD Atmosphere</title>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/shared.js"></script>
+<style>
+  body { padding-bottom: 36px; }
+
+  /* ---- Readiness indicators ---- */
+  #readiness {
+    width: var(--panel);
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+  }
+  .indicator { display: flex; align-items: center; gap: 6px; }
+  .indicator .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+    background: #4a4030;
+    transition: background 0.3s;
+  }
+  .indicator.ready  .dot { background: #5aaa5a; }
+  .indicator.error  .dot { background: #aa4a4a; }
+  .indicator.checking .dot { background: #7a6a3a; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .indicator.ready   { color: #6a9a6a; }
+  .indicator.error   { color: #9a5a5a; }
+  .indicator.checking { color: #7a6a4a; }
+
+  #btn-grant-mic {
+    padding: 2px 10px;
+    font-family: inherit;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    border: 1px solid #5a7a5a;
+    background: #141a14;
+    color: #8aba8a;
+    cursor: pointer;
+  }
+  #btn-grant-mic:hover { background: #1a241a; border-color: #7aaa7a; }
+
+  /* ---- Mode toggle ---- */
+  #mode-toggle {
+    display: flex;
+    border: 1px solid #3a3020;
+    margin-bottom: 12px;
+    overflow: hidden;
+    width: var(--panel);
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 6px 24px;
+    font-family: inherit;
+    font-size: 0.75rem;
+    border: none;
+    border-radius: 0;
+    background: #111008;
+    color: #4a3f2a;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .mode-btn:hover:not(.active) { background: #191510; color: #9a8a6a; }
+  .mode-btn.active { background: #1f1a10; color: #e8d5a3; }
+
+  /* ---- Base prompt ---- */
+  #prompt-area { width: var(--panel); margin-bottom: 16px; }
+  #prompt-area label {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7a6a4a;
+    margin-bottom: 6px;
+  }
+  #base-prompt {
+    width: 100%;
+    height: 400px;
+    background: #141210;
+    border: 1px solid #3a3020;
+    color: #c9b99a;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  #base-prompt:focus { outline: none; border-color: #6a5a3a; }
+
+  /* ---- Scene input (text mode) ---- */
+  #scene-controls { display: none; width: var(--panel); margin-bottom: 12px; }
+  #scene-controls label {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7a6a4a;
+    margin-bottom: 6px;
+  }
+  #scene-input {
+    width: 100%;
+    height: 240px;
+    background: #141210;
+    border: 1px solid #3a3020;
+    color: #c9b99a;
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 8px 10px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  #scene-input:focus { outline: none; border-color: #6a5a3a; }
+  #scene-input::placeholder { color: #3a3020; }
+
+  /* ---- Size selector ---- */
+  #size-section { width: var(--panel); margin-bottom: 16px; }
+  #size-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: #5a5040; margin-bottom: 6px; }
+  #size-toggle { display: flex; border: 1px solid #3a3020; overflow: hidden; }
+  .size-btn {
+    flex: 1;
+    padding: 5px 0;
+    font-family: inherit;
+    font-size: 0.72rem;
+    border: none;
+    border-radius: 0;
+    background: #111008;
+    color: #4a3f2a;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .size-btn:hover:not(.active) { background: #191510; color: #9a8a6a; }
+  .size-btn.active { background: #1f1a10; color: #e8d5a3; }
+
+  /* ---- Hidden checkbox ---- */
+  .hidden-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #7a6a4a;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    user-select: none;
+    width: var(--panel);
+    margin-bottom: 10px;
+  }
+  .hidden-label input[type="checkbox"] { width: 14px; height: 14px; accent-color: #7a6a4a; cursor: pointer; }
+
+  /* ---- Controls ---- */
+  #controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    width: var(--panel);
+  }
+  #text-controls { display: none; width: var(--panel); margin-bottom: 16px; align-items: center; }
+
+  button {
+    padding: 10px 28px;
+    font-family: inherit;
+    font-size: 1rem;
+    border: 1px solid #5a4a2a;
+    background: #1f1a10;
+    color: #e8d5a3;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  button:hover:not(:disabled) { background: #2e2510; border-color: #9a7a3a; }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  #btn-start  { border-color: #4a7a4a; color: #a8d4a8; }
+  #btn-start:hover:not(:disabled)  { background: #162016; border-color: #6aaa6a; }
+  #btn-cancel { border-color: #5a4a4a; color: #c49a9a; font-size: 0.82rem; padding: 10px 18px; }
+  #btn-cancel:hover:not(:disabled) { background: #1e1414; border-color: #8a6a6a; }
+  #btn-submit, #btn-text-submit { border-color: #7a6a2a; color: #e8d070; letter-spacing: 0.12em; }
+  #btn-submit:hover:not(:disabled),
+  #btn-text-submit:hover:not(:disabled) { background: #221e08; border-color: #c0a030; }
+
+  #timer { font-size: 2rem; font-variant-numeric: tabular-nums; color: #e8d5a3; min-width: 60px; text-align: center; }
+  #timer.recording { color: #d46a6a; }
+
+  /* ---- Step progress ---- */
+  #step-progress { display: none; align-items: center; gap: 10px; font-size: 0.78rem; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .step { display: flex; align-items: center; gap: 5px; color: #3a3020; transition: color 0.3s; }
+  .step .dot { width: 7px; height: 7px; border-radius: 50%; background: #3a3020; flex-shrink: 0; transition: background 0.3s; }
+  .step.active { color: #c9a84a; }
+  .step.active .dot { background: #c9a84a; animation: pulse 1.2s ease-in-out infinite; }
+  .step.done   { color: #5aaa5a; }
+  .step.done   .dot { background: #5aaa5a; }
+  .step-sep { color: #3a3020; }
+
+  /* ---- Transcription ---- */
+  #transcription-box { display: none; width: var(--panel); margin-bottom: 12px; }
+  #transcription-box label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5a5040;
+    margin-bottom: 5px;
+  }
+  #transcription-text {
+    background: #0f0e0a;
+    border: 1px solid #2a2518;
+    color: #a09070;
+    font-size: 0.88rem;
+    font-style: italic;
+    padding: 8px 10px;
+    line-height: 1.5;
+    min-height: 1.8em;
+  }
+
+  /* ---- Status / Timing ---- */
+  #status { min-height: 1.4em; font-size: 0.85rem; color: #9a8a6a; letter-spacing: 0.06em; margin-bottom: 4px; text-align: center; }
+  #status.error { color: #d46a6a; }
+  #timing { min-height: 1.2em; font-size: 0.72rem; color: #6a5a40; letter-spacing: 0.08em; margin-bottom: 12px; text-align: center; }
+
+  /* ---- Cost bar ---- */
+  #cost-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    padding: 6px 16px;
+    background: #0a0a0c;
+    border-top: 1px solid #2a2018;
+    font-size: 0.75rem;
+    color: #5a5040;
+  }
+  #cost-bar span { letter-spacing: 0.05em; }
+  #cost-bar b { color: #9a8a5a; }
+</style>
+</head>
+<body>
+
+<h1><a href="/">DnD Atmosphere</a></h1>
+
+<nav id="dm-nav">
+  <a href="/generate.html" class="active">&#9881; Generate</a>
+  <a href="/upload.html">&#8679; Upload</a>
+  <a href="/gallery.html">&#9783; Gallery</a>
+  <a href="/logs.html">&#9776; Logs</a>
+</nav>
+
+<div id="readiness">
+  <span id="ind-mic"   class="indicator checking"><span class="dot"></span>Microphone</span>
+  <button id="btn-grant-mic" style="display:none">Grant mic access</button>
+  <span id="ind-model" class="indicator checking"><span class="dot"></span>Whisper model</span>
+  <span id="ind-key"   class="indicator checking"><span class="dot"></span>API key</span>
+</div>
+
+<div id="mode-toggle">
+  <button class="mode-btn active" id="btn-mode-voice">&#9679; Voice</button>
+  <button class="mode-btn"        id="btn-mode-text">&#10002; Type</button>
+</div>
+
+<div id="prompt-area">
+  <label>Base Style Prompt</label>
+  <textarea id="base-prompt" spellcheck="false">fantasy tabletop RPG atmosphere, dramatic lighting, detailed environment art, digital painting, dark fantasy</textarea>
+</div>
+
+<div id="scene-controls">
+  <label>Scene Description</label>
+  <textarea id="scene-input" placeholder="Describe the scene..."></textarea>
+</div>
+
+<div id="size-section">
+  <div id="size-label">Image Size</div>
+  <div id="size-toggle">
+    <button class="size-btn active" data-size="1024x1024">Square 1:1</button>
+    <button class="size-btn"        data-size="1536x1024">Landscape 3:2</button>
+    <button class="size-btn"        data-size="1024x1536">Portrait 2:3</button>
+  </div>
+</div>
+
+<label class="hidden-label">
+  <input type="checkbox" id="chk-hidden"> Hide from players
+</label>
+
+<div id="controls">
+  <button id="btn-start" disabled>&#9679; Start Listen</button>
+  <button id="btn-cancel" style="display:none">&#10005; I Changed My Mind</button>
+  <span id="timer" style="display:none">0:00</span>
+  <button id="btn-submit" style="display:none">&#10024; Do The Magic</button>
+</div>
+
+<div id="text-controls">
+  <button id="btn-text-submit" disabled>&#10024; Do The Magic</button>
+</div>
+
+<div id="step-progress">
+  <span id="step-transcribe" class="step"><span class="dot"></span>Transcribing</span>
+  <span class="step-sep">→</span>
+  <span id="step-generate"   class="step"><span class="dot"></span>Generating image</span>
+</div>
+
+<div id="transcription-box">
+  <label>Heard</label>
+  <div id="transcription-text"></div>
+</div>
+
+<div id="status">Checking prerequisites...</div>
+<div id="timing"></div>
+
+<footer id="cost-bar">
+  <span>Image: <b id="cost-image">—</b></span>
+  <span>Session: <b id="cost-session">$0.000</b></span>
+  <span>Lifetime: <b id="cost-lifetime">$0.000</b></span>
+</footer>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let mediaRecorder = null;
+let audioChunks   = [];
+let elapsed       = 0;
+let elapsedTimer  = null;
+let isGenerating  = false;
+let cancelPending = false;
+let currentMode   = 'voice';
+let imageSize     = localStorage.getItem('dnd-atmo-image-size') || '1024x1024';
+
+const ready    = { mic: false, model: false, apiKey: false };
+let micBlocked = false;
+
+// ============================================================
+// DOM refs
+// ============================================================
+const btnStart         = document.getElementById('btn-start');
+const btnCancel        = document.getElementById('btn-cancel');
+const btnSubmit        = document.getElementById('btn-submit');
+const timerEl          = document.getElementById('timer');
+const statusEl         = document.getElementById('status');
+const basePromptEl     = document.getElementById('base-prompt');
+const costImageEl      = document.getElementById('cost-image');
+const costSessionEl    = document.getElementById('cost-session');
+const costLifetimeEl   = document.getElementById('cost-lifetime');
+const indMic           = document.getElementById('ind-mic');
+const indModel         = document.getElementById('ind-model');
+const indKey           = document.getElementById('ind-key');
+const btnGrantMic      = document.getElementById('btn-grant-mic');
+const stepProgress     = document.getElementById('step-progress');
+const stepTranscribe   = document.getElementById('step-transcribe');
+const stepGenerate     = document.getElementById('step-generate');
+const transcriptionBox = document.getElementById('transcription-box');
+const transcriptionTxt = document.getElementById('transcription-text');
+const timingEl         = document.getElementById('timing');
+const btnModeVoice     = document.getElementById('btn-mode-voice');
+const btnModeText      = document.getElementById('btn-mode-text');
+const textControls     = document.getElementById('text-controls');
+const sceneControls    = document.getElementById('scene-controls');
+const sceneInput       = document.getElementById('scene-input');
+const btnTextSubmit    = document.getElementById('btn-text-submit');
+const chkHidden        = document.getElementById('chk-hidden');
+
+// ============================================================
+// Pre-flight
+// ============================================================
+async function preflight() {
+  await Promise.all([checkBackendStatus(), checkMicPermission()]);
+}
+
+async function checkBackendStatus() {
+  try {
+    const resp = await fetch('/api.php?action=status');
+    const data = await resp.json();
+
+    setIndicator(indModel, data.model_ready, 'Model ready', 'Model not found — run: dnd model');
+    ready.model = data.model_ready;
+    setIndicator(indKey, data.api_key_set, 'API key set', 'OPENAI_API_KEY missing');
+    ready.apiKey = data.api_key_set;
+
+    if (data.session_cost)  costSessionEl.textContent  = '$' + data.session_cost.toFixed(3);
+    if (data.lifetime_cost) costLifetimeEl.textContent = '$' + data.lifetime_cost.toFixed(3);
+    if (data.image_sizes)   rebuildSizeButtons(data.image_sizes);
+  } catch (e) {
+    setIndicator(indModel, false, '', 'Backend unreachable');
+    setIndicator(indKey,   false, '', 'Backend unreachable');
+  }
+  updateStartButton();
+}
+
+async function checkMicPermission() {
+  if (!window.isSecureContext) {
+    setIndicator(indMic, false, '', 'Microphone requires HTTPS');
+    micBlocked = true;
+    updateStartButton();
+    return;
+  }
+  if (navigator.permissions) {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' });
+      applyMicPermission(result.state);
+      result.onchange = () => applyMicPermission(result.state);
+      return;
+    } catch (_) {}
+  }
+  setIndicator(indMic, null, '', 'Click Record to grant access');
+  updateStartButton();
+}
+
+function applyMicPermission(state) {
+  if (state === 'granted') {
+    setIndicator(indMic, true, 'Microphone ready');
+    ready.mic = true; micBlocked = false;
+    btnGrantMic.style.display = 'none';
+  } else if (state === 'denied') {
+    setIndicator(indMic, false, '', 'Microphone blocked — check browser settings');
+    ready.mic = false; micBlocked = true;
+    btnGrantMic.style.display = 'none';
+  } else {
+    setIndicator(indMic, null, '', 'Permission not granted');
+    ready.mic = false; micBlocked = false;
+    btnGrantMic.style.display = '';
+  }
+  updateStartButton();
+}
+
+async function requestMicAccess() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s.getTracks().forEach(t => t.stop());
+    applyMicPermission('granted');
+  } catch (e) { applyMicPermission('denied'); }
+}
+
+btnGrantMic.addEventListener('click', requestMicAccess);
+
+// ============================================================
+// Indicator helper
+// ============================================================
+function setIndicator(el, state, okLabel, errLabel = '') {
+  el.className = 'indicator ' + (state === true ? 'ready' : state === false ? 'error' : 'checking');
+  el.innerHTML = '<span class="dot"></span>' + (state === true ? okLabel : (errLabel || okLabel));
+}
+
+// ============================================================
+// Recording
+// ============================================================
+btnStart.addEventListener('click',  startRecording);
+btnCancel.addEventListener('click', cancelRecording);
+btnSubmit.addEventListener('click', submitRecording);
+
+async function startRecording() {
+  if (!ready.mic) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach(t => t.stop());
+      ready.mic = true;
+      setIndicator(indMic, true, 'Microphone ready');
+      updateStartButton();
+    } catch (e) {
+      setIndicator(indMic, false, '', 'Microphone blocked — allow in browser settings');
+      ready.mic = false;
+      updateStartButton();
+      return;
+    }
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    setIndicator(indMic, false, '', 'Microphone access lost');
+    ready.mic = false;
+    updateStartButton();
+    return;
+  }
+
+  cancelPending = false;
+  audioChunks   = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    if (cancelPending) { cancelPending = false; audioChunks = []; resetUI(); return; }
+    handleRecordingComplete();
+  };
+  mediaRecorder.start(1000);
+
+  btnStart.style.display  = 'none';
+  btnCancel.style.display = '';
+  btnSubmit.style.display = '';
+  timerEl.style.display   = 'inline';
+  timerEl.classList.add('recording');
+  startElapsed();
+}
+
+function cancelRecording() {
+  cancelPending = true;
+  stopElapsed();
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  timerEl.classList.remove('recording');
+  timerEl.style.display = 'none';
+  setStatus('');
+}
+
+function submitRecording() {
+  stopElapsed();
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  btnCancel.style.display = 'none';
+  btnSubmit.style.display = 'none';
+  timerEl.classList.remove('recording');
+  timerEl.style.display   = 'none';
+}
+
+function startElapsed() {
+  elapsed = 0; updateTimerDisplay(0);
+  elapsedTimer = setInterval(() => { elapsed++; updateTimerDisplay(elapsed); }, 1000);
+}
+function stopElapsed() { clearInterval(elapsedTimer); elapsedTimer = null; }
+function updateTimerDisplay(s) {
+  timerEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// ============================================================
+// Pipeline: voice
+// ============================================================
+async function handleRecordingComplete() {
+  if (audioChunks.length === 0) {
+    showToast('No audio captured.', 'error');
+    resetUI();
+    return;
+  }
+
+  isGenerating = true;
+  updateAllButtons();
+  timingEl.textContent = '';
+  transcriptionBox.style.display = 'none';
+
+  // Step 1: Transcribe
+  showSteps('transcribe');
+  setStatus('Transcribing speech...');
+  const t0        = Date.now();
+  const liveTimer = startLiveTiming(t0, s => `${s}s`);
+
+  const formData = new FormData();
+  formData.append('action',      'transcribe');
+  formData.append('audio',       new Blob(audioChunks, { type: 'audio/webm;codecs=opus' }), 'recording.webm');
+  formData.append('base_prompt', basePromptEl.value.trim());
+
+  let tr;
+  try {
+    const r = await fetch('/api.php', { method: 'POST', body: formData });
+    tr = await r.json();
+    if (!r.ok) throw new Error(tr.error ?? `HTTP ${r.status}`);
+  } catch (err) {
+    clearInterval(liveTimer); hideSteps(); setStatus('');
+    showToast('Transcription error: ' + err.message, 'error');
+    isGenerating = false; resetUI(); return;
+  }
+
+  clearInterval(liveTimer);
+  const t1 = Date.now();
+  transcriptionTxt.textContent   = tr.transcription || '(nothing heard)';
+  transcriptionBox.style.display = 'block';
+
+  // Step 2: Generate
+  showSteps('generate');
+  setStatus('Generating image...');
+  const liveTimer2 = startLiveTiming(t1, s => `${((t1 - t0) / 1000).toFixed(1)}s · ${s}s`);
+
+  const fd2 = new FormData();
+  fd2.append('action',      'generate');
+  fd2.append('base_prompt', basePromptEl.value.trim());
+  fd2.append('scene',       tr.transcription);
+  fd2.append('size',        imageSize);
+  fd2.append('hidden',      chkHidden.checked ? '1' : '0');
+
+  let gen;
+  try {
+    const r2 = await fetch('/api.php', { method: 'POST', body: fd2 });
+    gen = await r2.json();
+    if (!r2.ok) throw new Error(gen.error ?? `HTTP ${r2.status}`);
+  } catch (err) {
+    clearInterval(liveTimer2); hideSteps(); setStatus('');
+    showToast('Image generation error: ' + err.message, 'error');
+    isGenerating = false; resetUI(); return;
+  }
+
+  clearInterval(liveTimer2);
+  hideSteps();
+  onGenerationSuccess(gen, ((t1 - t0) / 1000).toFixed(1), ((Date.now() - t1) / 1000).toFixed(1));
+  isGenerating = false; resetUI();
+}
+
+// ============================================================
+// Pipeline: text
+// ============================================================
+btnTextSubmit.addEventListener('click', handleTextSubmit);
+
+async function handleTextSubmit() {
+  isGenerating = true;
+  timingEl.textContent = '';
+  updateAllButtons();
+
+  stepProgress.style.display   = 'flex';
+  stepTranscribe.style.display = 'none';
+  stepGenerate.className       = 'step active';
+  setStatus('Generating image...');
+  const t0        = Date.now();
+  const liveTimer = startLiveTiming(t0, s => `${s}s`);
+
+  const fd = new FormData();
+  fd.append('action',      'generate');
+  fd.append('base_prompt', basePromptEl.value.trim());
+  fd.append('scene',       sceneInput.value.trim());
+  fd.append('size',        imageSize);
+  fd.append('hidden',      chkHidden.checked ? '1' : '0');
+
+  let gen;
+  try {
+    const r = await fetch('/api.php', { method: 'POST', body: fd });
+    gen = await r.json();
+    if (!r.ok) throw new Error(gen.error ?? `HTTP ${r.status}`);
+  } catch (err) {
+    clearInterval(liveTimer); hideSteps(); setStatus('');
+    showToast('Image generation error: ' + err.message, 'error');
+    isGenerating = false; updateTextButton(); return;
+  }
+
+  clearInterval(liveTimer);
+  hideSteps();
+  onGenerationSuccess(gen, null, ((Date.now() - t0) / 1000).toFixed(1));
+  isGenerating = false; resetUI();
+}
+
+// ============================================================
+// Generation success
+// ============================================================
+function onGenerationSuccess(gen, transcribeSec, genSec) {
+  costImageEl.textContent    = '$' + gen.cost_image.toFixed(3);
+  costSessionEl.textContent  = '$' + gen.cost_session.toFixed(3);
+  costLifetimeEl.textContent = '$' + gen.cost_lifetime.toFixed(3);
+
+  const epicLines = [
+    'The vision takes shape... let it wash over you.',
+    'The realm reveals itself. Breathe it in.',
+    'The mists part. What do you see?',
+    'Reality bends to your words.',
+    'The scene is set. The dice await.',
+    'Your world, rendered. Take a moment.',
+    'The veil lifts. Behold.',
+    'The arcane mirrors reflect your vision.',
+  ];
+  setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+
+  const parts = [];
+  if (transcribeSec) parts.push(`Transcribed in ${transcribeSec}s`);
+  parts.push(`Generated in ${genSec}s`);
+  timingEl.textContent = parts.join(' · ');
+
+  showToast('Image generated ($' + gen.cost_image.toFixed(3) + ')', 'success', {
+    href:  gen.image_url,
+    label: 'View image',
+  });
+}
+
+// ============================================================
+// Step progress
+// ============================================================
+function showSteps(active) {
+  stepProgress.style.display = 'flex';
+  setStatus('');
+  stepTranscribe.className = active === 'transcribe' ? 'step active' : 'step done';
+  stepGenerate.className   = active === 'generate'   ? 'step active' : 'step';
+}
+
+function hideSteps() {
+  stepProgress.style.display   = 'none';
+  stepTranscribe.style.display = '';
+  stepTranscribe.className     = 'step';
+  stepGenerate.className       = 'step';
+}
+
+// ============================================================
+// Mode toggle
+// ============================================================
+btnModeVoice.addEventListener('click', () => switchMode('voice'));
+btnModeText.addEventListener('click',  () => switchMode('text'));
+
+function switchMode(mode) {
+  currentMode = mode;
+  btnModeVoice.classList.toggle('active', mode === 'voice');
+  btnModeText.classList.toggle('active',  mode === 'text');
+  document.getElementById('controls').style.display = mode === 'voice' ? 'flex' : 'none';
+  sceneControls.style.display = mode === 'text' ? 'block' : 'none';
+  textControls.style.display  = mode === 'text' ? 'flex'  : 'none';
+  indMic.style.display      = mode !== 'voice' ? 'none' : '';
+  btnGrantMic.style.display = mode !== 'voice' ? 'none' : (micBlocked ? 'block' : 'none');
+  if (mode !== 'voice') transcriptionBox.style.display = 'none';
+  updateStartButton();
+  updateTextButton();
+  location.replace('#' + mode);
+}
+
+// ============================================================
+// Button state
+// ============================================================
+function updateStartButton() {
+  const micOk    = ready.mic || !micBlocked;
+  const allReady = micOk && ready.model && ready.apiKey;
+  btnStart.disabled     = !allReady || isGenerating;
+  btnModeVoice.disabled = isGenerating || btnCancel.style.display !== 'none';
+  btnModeText.disabled  = isGenerating || btnCancel.style.display !== 'none';
+
+  if (!allReady && !isGenerating) {
+    const missing = [];
+    if (!micOk)        missing.push('microphone');
+    if (!ready.model)  missing.push('whisper model');
+    if (!ready.apiKey) missing.push('API key');
+    setStatus('Not ready: ' + missing.join(', ') + '.', true);
+  } else if (allReady && !isGenerating) {
+    setStatus('');
+  }
+}
+
+function updateTextButton() {
+  btnTextSubmit.disabled = !ready.apiKey || isGenerating || sceneInput.value.trim().length === 0;
+}
+sceneInput.addEventListener('input', updateTextButton);
+
+function updateAllButtons() { updateStartButton(); updateTextButton(); }
+
+function resetUI() {
+  btnCancel.style.display = 'none';
+  btnSubmit.style.display = 'none';
+  if (currentMode === 'voice') btnStart.style.display = '';
+  updateAllButtons();
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function startLiveTiming(startMs, labelFn) {
+  timingEl.textContent = labelFn(0);
+  return setInterval(() => {
+    timingEl.textContent = labelFn(Math.floor((Date.now() - startMs) / 1000));
+  }, 1000);
+}
+
+function setStatus(msg, isError = false) {
+  statusEl.textContent = msg;
+  statusEl.className   = isError ? 'error' : '';
+}
+
+// ============================================================
+// Base prompt persistence + size picker
+// ============================================================
+const savedPrompt = localStorage.getItem('dnd-atmo-base-prompt');
+if (savedPrompt !== null) basePromptEl.value = savedPrompt;
+basePromptEl.addEventListener('blur', () => localStorage.setItem('dnd-atmo-base-prompt', basePromptEl.value));
+
+function rebuildSizeButtons(sizes) {
+  const toggle = document.getElementById('size-toggle');
+  toggle.innerHTML = '';
+  if (!sizes.find(s => s.value === imageSize)) {
+    imageSize = sizes[0].value;
+    localStorage.setItem('dnd-atmo-image-size', imageSize);
+  }
+  sizes.forEach(({ value, label }) => {
+    const btn = document.createElement('button');
+    btn.className    = 'size-btn' + (value === imageSize ? ' active' : '');
+    btn.dataset.size = value;
+    btn.textContent  = label;
+    btn.addEventListener('click', () => {
+      imageSize = value;
+      localStorage.setItem('dnd-atmo-image-size', imageSize);
+      toggle.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+    toggle.appendChild(btn);
+  });
+}
+
+// ============================================================
+// Boot
+// ============================================================
+switchMode(location.hash.slice(1) === 'text' ? 'text' : 'voice');
+preflight();
+</script>
+
+</body>
+</html>
