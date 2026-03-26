@@ -16,10 +16,11 @@ if ($basePrompt === '' && $scene === '') {
 
 $finalPrompt = buildPrompt($basePrompt, $scene);
 
-$imageB64       = null;
-$lastError      = 'Unknown error';
-$lastHttpStatus = 0;
-$successAttempt = 0;
+$imageB64        = null;
+$lastError       = 'Unknown error';
+$lastHttpStatus  = 0;
+$successAttempt  = 0;
+$safetyRewritten = false;
 
 for ($attempt = 1; $attempt <= 3; $attempt++) {
     $result = callOpenAI($finalPrompt, $size, $cfg);
@@ -29,26 +30,43 @@ for ($attempt = 1; $attempt <= 3; $attempt++) {
         $successAttempt = $attempt;
         break;
     }
+
     $lastError      = $result['error'];
     $lastHttpStatus = $result['http_status'];
-    if ($attempt < 3) sleep(3);
+    $isSafety       = str_contains($lastError, 'safety system');
+
+    if ($isSafety && !$safetyRewritten) {
+        // First safety hit: rephrase and retry immediately
+        $rewritten = rephraseForSafety($finalPrompt);
+        if ($rewritten !== null) {
+            $finalPrompt     = $rewritten;
+            $safetyRewritten = true;
+            continue;
+        }
+        break; // couldn't rephrase, give up
+    }
+
+    if ($isSafety) break; // rewrite also rejected, give up
+
+    if ($attempt < 3) sleep(3); // transient error: wait and retry
 }
 
 if ($imageB64 === null) {
     writeLog([
-        'type'         => 'generation',
-        'transcription'=> $scene ?: null,
-        'base_prompt'  => $basePrompt,
-        'final_prompt' => $finalPrompt,
-        'model'        => $cfg['model'],
-        'quality'      => $cfg['quality'],
-        'size'         => $size,
-        'attempts'     => 3,
-        'http_status'  => $lastHttpStatus,
-        'image_url'    => null,
-        'cost'         => null,
-        'duration_s'   => round(microtime(true) - $tStart, 2),
-        'error'        => $lastError,
+        'type'            => 'generation',
+        'transcription'   => $scene ?: null,
+        'base_prompt'     => $basePrompt,
+        'final_prompt'    => $finalPrompt,
+        'safety_rewrite'  => $safetyRewritten,
+        'model'           => $cfg['model'],
+        'quality'         => $cfg['quality'],
+        'size'            => $size,
+        'attempts'        => $attempt,
+        'http_status'     => $lastHttpStatus,
+        'image_url'       => null,
+        'cost'            => null,
+        'duration_s'      => round(microtime(true) - $tStart, 2),
+        'error'           => $lastError,
     ]);
     http_response_code(502);
     echo json_encode(['error' => "Image generation failed: $lastError"]);
@@ -89,19 +107,20 @@ saveCosts($costs);
 $imageUrl = '/sessions/' . $today . '/' . $imageName . '.jpg';
 
 writeLog([
-    'type'         => 'generation',
-    'transcription'=> $scene ?: null,
-    'base_prompt'  => $basePrompt,
-    'final_prompt' => $finalPrompt,
-    'model'        => $cfg['model'],
-    'quality'      => $cfg['quality'],
-    'size'         => $size,
-    'attempts'     => $successAttempt,
-    'http_status'  => $lastHttpStatus,
-    'image_url'    => $imageUrl,
-    'cost'         => $costImage,
-    'duration_s'   => round(microtime(true) - $tStart, 2),
-    'error'        => null,
+    'type'           => 'generation',
+    'transcription'  => $scene ?: null,
+    'base_prompt'    => $basePrompt,
+    'final_prompt'   => $finalPrompt,
+    'safety_rewrite' => $safetyRewritten,
+    'model'          => $cfg['model'],
+    'quality'        => $cfg['quality'],
+    'size'           => $size,
+    'attempts'       => $successAttempt,
+    'http_status'    => $lastHttpStatus,
+    'image_url'      => $imageUrl,
+    'cost'           => $costImage,
+    'duration_s'     => round(microtime(true) - $tStart, 2),
+    'error'          => null,
 ]);
 
 echo json_encode([

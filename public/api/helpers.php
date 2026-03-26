@@ -68,6 +68,49 @@ function imageCost(string $model, string $quality, string $size): float
     };
 }
 
+function rephraseForSafety(string $prompt): ?string
+{
+    $apiKey = OPENAI_API_KEY;
+    if ($apiKey === '') return null;
+
+    $payload = [
+        'model'       => 'gpt-4o-mini',
+        'messages'    => [
+            [
+                'role'    => 'system',
+                'content' => 'You rewrite image generation prompts for a fantasy tabletop RPG atmosphere display. '
+                           . 'The prompt was rejected by a safety filter. '
+                           . 'Preserve the scene and mood but rephrase using clearly fantastical, painterly, artistic language — '
+                           . 'frame it as a fantasy illustration or digital painting, avoid realistic-sounding violence or gore. '
+                           . 'Return ONLY the rewritten prompt, no commentary.',
+            ],
+            ['role' => 'user', 'content' => $prompt],
+        ],
+        'max_tokens'  => 500,
+        'temperature' => 0.7,
+    ];
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ],
+    ]);
+
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $code !== 200) return null;
+    $data = json_decode($raw, true);
+    return trim($data['choices'][0]['message']['content'] ?? '') ?: null;
+}
+
 function callOpenAI(string $prompt, string $size, array $cfg): array
 {
     $apiKey = OPENAI_API_KEY;

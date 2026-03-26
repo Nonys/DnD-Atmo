@@ -259,6 +259,7 @@
   <button id="btn-grant-mic" style="display:none">Grant mic access</button>
   <span id="ind-model" class="indicator checking"><span class="dot"></span>Whisper model</span>
   <span id="ind-key"   class="indicator checking"><span class="dot"></span>API key</span>
+  <span id="ind-model-cfg" class="indicator"><span class="dot" style="display:none"></span><span id="model-cfg-label" style="color:#3a3020">—</span></span>
 </div>
 
 <div id="mode-toggle">
@@ -382,6 +383,11 @@ async function checkBackendStatus() {
     ready.model = data.model_ready;
     setIndicator(indKey, data.api_key_set, 'API key set', 'OPENAI_API_KEY missing');
     ready.apiKey = data.api_key_set;
+
+    if (data.image_model) {
+      document.getElementById('model-cfg-label').textContent =
+        data.image_model + ' · ' + (data.image_quality || '—');
+    }
 
     if (data.session_cost)  costSessionEl.textContent  = '$' + data.session_cost.toFixed(3);
     if (data.lifetime_cost) costLifetimeEl.textContent = '$' + data.lifetime_cost.toFixed(3);

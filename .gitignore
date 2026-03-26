@@ -2,5 +2,6 @@
 .claude
 .idea
 data/costs.json
+data/activity.ndjson
 public/sessions/
 models/
