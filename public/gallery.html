@@ -8,6 +8,9 @@
   <script src="/shared.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js"></script>
 <style>
+  /* Wider panel for gallery — takes advantage of desktop width */
+  :root { --panel: min(1200px, calc(100vw - 32px)); }
+
   body { padding-bottom: 20px; }
 
   /* ---- Carousel ---- */
@@ -53,9 +56,9 @@
     border: 1px solid;
     font-family: inherit;
   }
-  .btn-del { top: 3px; right: 3px; background: rgba(15,5,5,0.88); border-color: #7a3a3a; color: #d46a6a; }
-  .btn-del:hover { background: #2a0a0a; border-color: #aa5a5a; }
-  .btn-hide { top: 3px; left: 3px; background: rgba(15,5,5,0.88); border-color: #4a4030; color: #8a7a5a; }
+  .btn-del  { top: 3px; right: 3px; background: rgba(15,5,5,0.88); border-color: #7a3a3a; color: #d46a6a; }
+  .btn-hide { top: 3px; left:  3px; background: rgba(15,5,5,0.88); border-color: #4a4030; color: #8a7a5a; }
+  .btn-del:hover  { background: #2a0a0a; border-color: #aa5a5a; }
   .btn-hide:hover { background: #181508; border-color: #9a8a5a; color: #c0aa70; }
 
   .thumb-wrap:hover .btn-del,
@@ -64,22 +67,42 @@
     .thumb-wrap .btn-del,
     .thumb-wrap .btn-hide { display: block; width: 28px; height: 28px; }
   }
-  .thumb-wrap.hidden .btn-hide { display: block; }
-  .thumb-wrap.hidden .thumb { opacity: 0.25; filter: grayscale(40%); }
+  .thumb-wrap.hidden .btn-hide        { display: block; }
+  .thumb-wrap.hidden .thumb           { opacity: 0.25; filter: grayscale(40%); }
   .thumb-wrap.hidden .thumb:hover,
-  .thumb-wrap.hidden .thumb.active { opacity: 0.55; }
+  .thumb-wrap.hidden .thumb.active    { opacity: 0.55; }
 
   /* ---- Status ---- */
-  #gallery-status { min-height: 1.2em; font-size: 0.78rem; color: #5a5040; letter-spacing: 0.06em; margin-bottom: 8px; text-align: center; }
-
-  /* ---- Big frame ---- */
-  #gallery-frame {
+  #gallery-status {
     width: var(--panel);
+    min-height: 1.2em;
+    font-size: 0.78rem;
+    color: #5a5040;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  /* ---- Two-column main layout ---- */
+  #gallery-main {
+    width: var(--panel);
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 700px) {
+    #gallery-main { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Image frame ---- */
+  #gallery-frame {
+    width: 100%;
     position: relative;
     aspect-ratio: 1;
     background: #1a1710;
     border: 1px solid #3a3020;
-    margin-bottom: 16px;
     overflow: hidden;
     transition: aspect-ratio 0.4s ease;
   }
@@ -95,26 +118,46 @@
     color: #4a3f2a; font-size: 0.9rem; letter-spacing: 0.1em; z-index: 0;
   }
 
-  /* ---- Prompt display ---- */
-  #prompt-display { display: none; width: var(--panel); margin-bottom: 16px; }
+  /* ---- Sidebar ---- */
+  #gallery-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  #sidebar-hint {
+    font-size: 0.78rem;
+    color: #3a3020;
+    letter-spacing: 0.08em;
+    font-style: italic;
+    padding: 8px 0;
+  }
+
+  #prompt-display { display: none; }
   #prompt-display label {
     display: block;
     font-size: 0.7rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #5a5040;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
   }
   #prompt-text {
     background: #0f0e0a;
     border: 1px solid #2a2518;
     color: #7a6a4a;
-    font-size: 0.8rem;
-    padding: 8px 10px;
-    line-height: 1.5;
+    font-size: 0.82rem;
+    padding: 10px 12px;
+    line-height: 1.7;
     white-space: pre-wrap;
+    word-break: break-word;
     overflow-y: auto;
-    max-height: 200px;
+    max-height: 70vh;
+  }
+
+  /* On mobile the prompt sits below the image, cap height lower */
+  @media (max-width: 700px) {
+    #prompt-text { max-height: 40vh; }
   }
 </style>
 </head>
@@ -122,35 +165,38 @@
 
 <h1><a href="/">DnD Atmosphere</a></h1>
 
-<nav id="dm-nav">
-  <a href="/generate.html">&#9881; Generate</a>
-  <a href="/upload.html">&#8679; Upload</a>
-  <a href="/gallery.html" class="active">&#9783; Gallery</a>
-  <a href="/logs.html">&#9776; Logs</a>
-</nav>
+<nav id="dm-nav"></nav>
 
 <div id="gallery-carousel"></div>
 <div id="gallery-status"></div>
 
-<div id="gallery-frame">
-  <div id="gallery-placeholder">Select an image...</div>
-  <img id="gallery-prev"    src="" alt="">
-  <img id="gallery-current" src="" alt="">
-</div>
+<div id="gallery-main">
 
-<div id="prompt-display">
-  <label>Prompt used</label>
-  <div id="prompt-text"></div>
+  <div id="gallery-frame">
+    <div id="gallery-placeholder">Select an image...</div>
+    <img id="gallery-prev"    src="" alt="">
+    <img id="gallery-current" src="" alt="">
+  </div>
+
+  <div id="gallery-sidebar">
+    <div id="sidebar-hint">Select an image to see its prompt.</div>
+    <div id="prompt-display">
+      <label>Prompt used</label>
+      <div id="prompt-text"></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
-const carousel    = document.getElementById('gallery-carousel');
-const frame       = document.getElementById('gallery-frame');
-const currentImg  = document.getElementById('gallery-current');
-const prevImg     = document.getElementById('gallery-prev');
-const placeholder = document.getElementById('gallery-placeholder');
+const carousel      = document.getElementById('gallery-carousel');
+const frame         = document.getElementById('gallery-frame');
+const currentImg    = document.getElementById('gallery-current');
+const prevImg       = document.getElementById('gallery-prev');
+const placeholder   = document.getElementById('gallery-placeholder');
 const promptDisplay = document.getElementById('prompt-display');
 const promptText    = document.getElementById('prompt-text');
+const sidebarHint   = document.getElementById('sidebar-hint');
 const statusEl      = document.getElementById('gallery-status');
 
 function setStatus(msg) { statusEl.textContent = msg; }
@@ -173,28 +219,28 @@ async function loadGallery() {
 }
 
 // ============================================================
-// Thumbnail management
+// Thumbnails
 // ============================================================
 function addThumb(url, prompt, prepend, isHidden) {
   const wrap = document.createElement('div');
   wrap.className = 'thumb-wrap' + (isHidden ? ' hidden' : '');
 
   const img = document.createElement('img');
-  img.src           = url;
-  img.loading       = 'lazy';
-  img.className     = 'thumb';
+  img.src            = url;
+  img.loading        = 'lazy';
+  img.className      = 'thumb';
   img.dataset.prompt = prompt;
   img.addEventListener('click', () => selectThumb(img, url, prompt));
   wrap.appendChild(img);
 
-  const hideBtn = document.createElement('button');
+  const hideBtn       = document.createElement('button');
   hideBtn.className   = 'btn-hide';
   hideBtn.textContent = isHidden ? '●' : '◎';
   hideBtn.title       = isHidden ? 'Show to players' : 'Hide from players';
   hideBtn.addEventListener('click', e => { e.stopPropagation(); toggleHidden(wrap, url, hideBtn); });
   wrap.appendChild(hideBtn);
 
-  const delBtn = document.createElement('button');
+  const delBtn       = document.createElement('button');
   delBtn.className   = 'btn-del';
   delBtn.textContent = '×';
   delBtn.title       = 'Delete image';
@@ -223,7 +269,7 @@ function selectThumb(thumbEl, url, prompt) {
   }
 
   currentImg.classList.remove('visible');
-  currentImg.src = url;
+  currentImg.src    = url;
   currentImg.onload = () => {
     frame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
     currentImg.classList.add('visible');
@@ -232,8 +278,10 @@ function selectThumb(thumbEl, url, prompt) {
   if (prompt) {
     promptText.textContent      = prompt;
     promptDisplay.style.display = 'block';
+    sidebarHint.style.display   = 'none';
   } else {
     promptDisplay.style.display = 'none';
+    sidebarHint.style.display   = '';
   }
 }
 
@@ -284,9 +332,10 @@ async function deleteImage(wrap, img, url) {
       selectThumb(nextImg, nextImg.src, nextImg.dataset.prompt || '');
     } else {
       currentImg.classList.remove('visible');
-      currentImg.src = '';
-      placeholder.style.display = 'flex';
+      currentImg.src              = '';
+      placeholder.style.display   = 'flex';
       promptDisplay.style.display = 'none';
+      sidebarHint.style.display   = '';
     }
   }
   wrap.remove();
