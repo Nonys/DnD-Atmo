@@ -55,6 +55,20 @@ function imageConfig(): array
     ];
 }
 
+function imageCostFromUsage(array $usage, string $model, string $quality): float
+{
+    if ($model !== 'gpt-image-1') return 0.0;
+    // Input text tokens: $5.00 per 1M
+    $inputCost = (($usage['input_tokens'] ?? 0) * 5.0) / 1_000_000;
+    // Output image: flat rate per quality level
+    $outputCost = match ($quality) {
+        'low'   => 0.011,
+        'high'  => 0.167,
+        default => 0.042,
+    };
+    return round($inputCost + $outputCost, 6);
+}
+
 function imageCost(string $model, string $quality, string $size): float
 {
     if ($model === 'dall-e-3') {
@@ -149,27 +163,76 @@ function callOpenAI(string $prompt, string $size, array $cfg): array
     }
 
     $data = json_decode($raw, true);
+    if (!is_array($data)) {
+        $preview = substr(trim($raw), 0, 120);
+        return ['ok' => false, 'error' => "Non-JSON response: $preview", 'http_status' => $code, 'raw' => ['body' => substr($raw, 0, 500)]];
+    }
+
+    // Strip image payload before storing raw response in logs
+    $loggable = $data;
+    if (isset($loggable['data']) && is_array($loggable['data'])) {
+        foreach ($loggable['data'] as &$item) {
+            unset($item['b64_json'], $item['url']);
+        }
+        unset($item);
+    }
 
     if ($code !== 200 || empty($data['data'][0]['b64_json'])) {
         $msg = $data['error']['message'] ?? "HTTP $code";
-        return ['ok' => false, 'error' => $msg, 'http_status' => $code];
+        return ['ok' => false, 'error' => $msg, 'http_status' => $code, 'raw' => $loggable];
     }
 
-    return ['ok' => true, 'b64' => $data['data'][0]['b64_json'], 'http_status' => $code];
+    return [
+        'ok'          => true,
+        'b64'         => $data['data'][0]['b64_json'],
+        'http_status' => $code,
+        'usage'       => $data['usage'] ?? null,
+        'raw'         => $loggable,
+    ];
+}
+
+function costsFromLog(): array
+{
+    $today    = date('Y-m-d');
+    $lifetime = 0.0;
+    $session  = 0.0;
+
+    if (!file_exists(ACTIVITY_LOG)) {
+        return ['lifetime_cost' => 0.0, 'session_cost' => 0.0, 'session_date' => $today];
+    }
+
+    $fh = fopen(ACTIVITY_LOG, 'r');
+    if (!$fh) {
+        return ['lifetime_cost' => 0.0, 'session_cost' => 0.0, 'session_date' => $today];
+    }
+
+    while (($line = fgets($fh)) !== false) {
+        $entry = json_decode(trim($line), true);
+        if (!is_array($entry) || ($entry['type'] ?? '') !== 'generation') continue;
+        $cost = (float) ($entry['cost'] ?? 0);
+        if ($cost <= 0) continue;
+        $lifetime += $cost;
+        if (isset($entry['ts']) && str_starts_with($entry['ts'], $today)) {
+            $session += $cost;
+        }
+    }
+    fclose($fh);
+
+    return [
+        'lifetime_cost' => round($lifetime, 4),
+        'session_cost'  => round($session,  4),
+        'session_date'  => $today,
+    ];
 }
 
 function loadCosts(): array
 {
-    if (file_exists(COSTS_FILE)) {
-        $decoded = json_decode(file_get_contents(COSTS_FILE), true);
-        if (is_array($decoded)) return $decoded;
-    }
-    return ['lifetime_cost' => 0.0, 'session_cost' => 0.0, 'session_date' => ''];
+    return costsFromLog();
 }
 
 function saveCosts(array $costs): void
 {
-    file_put_contents(COSTS_FILE, json_encode($costs, JSON_PRETTY_PRINT));
+    // costs are now derived from the activity log — nothing to persist
 }
 
 function writeLog(array $entry): void

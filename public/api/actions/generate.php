@@ -19,20 +19,24 @@ $finalPrompt = buildPrompt($basePrompt, $scene);
 $imageB64        = null;
 $lastError       = 'Unknown error';
 $lastHttpStatus  = 0;
+$lastUsage       = null;
+$lastRaw         = null;
 $successAttempt  = 0;
 $safetyRewritten = false;
 
 for ($attempt = 1; $attempt <= 3; $attempt++) {
     $result = callOpenAI($finalPrompt, $size, $cfg);
+    $lastRaw        = $result['raw'] ?? null;
+    $lastHttpStatus = $result['http_status'];
+
     if ($result['ok']) {
         $imageB64       = $result['b64'];
-        $lastHttpStatus = $result['http_status'];
+        $lastUsage      = $result['usage'] ?? null;
         $successAttempt = $attempt;
         break;
     }
 
-    $lastError      = $result['error'];
-    $lastHttpStatus = $result['http_status'];
+    $lastError = $result['error'];
     $isSafety       = str_contains($lastError, 'safety system');
 
     if ($isSafety && !$safetyRewritten) {
@@ -67,6 +71,7 @@ if ($imageB64 === null) {
         'cost'            => null,
         'duration_s'      => round(microtime(true) - $tStart, 2),
         'error'           => $lastError,
+        'api_response'    => $lastRaw,
     ]);
     http_response_code(502);
     echo json_encode(['error' => "Image generation failed: $lastError"]);
@@ -94,7 +99,9 @@ if (($_POST['hidden'] ?? '0') === '1') {
     file_put_contents("$sessionDir/$imageName.hidden", '');
 }
 
-$costImage = imageCost($cfg['model'], $cfg['quality'], $size);
+$costImage = ($lastUsage !== null)
+    ? imageCostFromUsage($lastUsage, $cfg['model'], $cfg['quality'])
+    : imageCost($cfg['model'], $cfg['quality'], $size);
 $costs     = loadCosts();
 if (($costs['session_date'] ?? '') !== $today) {
     $costs['session_cost'] = 0.0;
@@ -121,6 +128,7 @@ writeLog([
     'cost'           => $costImage,
     'duration_s'     => round(microtime(true) - $tStart, 2),
     'error'          => null,
+    'api_response'   => $lastRaw,
 ]);
 
 echo json_encode([

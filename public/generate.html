@@ -141,6 +141,7 @@
   }
   .size-btn:hover:not(.active) { background: #191510; color: #9a8a6a; }
   .size-btn.active { background: #1f1a10; color: #e8d5a3; }
+  .size-cost { display: block; font-size: 0.65rem; opacity: 0.55; margin-top: 2px; letter-spacing: 0.06em; }
 
   /* ---- Hidden checkbox ---- */
   .hidden-label {
@@ -778,11 +779,13 @@ function rebuildSizeButtons(sizes) {
     imageSize = sizes[0].value;
     localStorage.setItem('dnd-atmo-image-size', imageSize);
   }
-  sizes.forEach(({ value, label }) => {
+  sizes.forEach(({ value, label, cost }) => {
     const btn = document.createElement('button');
     btn.className    = 'size-btn' + (value === imageSize ? ' active' : '');
     btn.dataset.size = value;
-    btn.textContent  = label;
+    btn.innerHTML    = label + (cost != null
+      ? '<span class="size-cost">$' + cost.toFixed(3) + '</span>'
+      : '');
     btn.addEventListener('click', () => {
       imageSize = value;
       localStorage.setItem('dnd-atmo-image-size', imageSize);

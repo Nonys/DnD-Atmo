@@ -24,6 +24,9 @@ echo json_encode([
     'server_ips'    => $ips,
     'image_model'   => $cfg['model'],
     'image_quality' => $cfg['quality'],
-    'image_sizes'   => $cfg['sizes'],
+    'image_sizes'   => array_map(function (array $s) use ($cfg): array {
+        $s['cost'] = imageCost($cfg['model'], $cfg['quality'], $s['value']);
+        return $s;
+    }, $cfg['sizes']),
 ]);
 exit;
