@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DnD Atmosphere Generator</title>
   <link rel="stylesheet" href="/theme.css">
+  <script src="/shared.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js"></script>
 <style>
     :root { --panel: min(720px, calc(100vw - 32px)); }
@@ -522,6 +523,7 @@
   <button class="tab-btn active" id="btn-tab-generate">&#9881; Generate</button>
   <button class="tab-btn"        id="btn-tab-upload">&#8679; Upload</button>
   <button class="tab-btn"        id="btn-tab-gallery">&#9783; Gallery</button>
+  <a class="tab-btn" href="/logs.html">&#9776; Logs</a>
 </div>
 
 <div id="tab-generate" class="active">
@@ -915,7 +917,7 @@ function updateTimerDisplay(seconds) {
 // ============================================================
 async function handleRecordingComplete() {
   if (audioChunks.length === 0) {
-    setStatus('No audio captured.', true);
+    showToast('No audio captured.', 'error');
     resetUI();
     return;
   }
@@ -946,7 +948,8 @@ async function handleRecordingComplete() {
   } catch (err) {
     clearInterval(liveTimer);
     hideSteps();
-    setStatus('Transcription error: ' + err.message, true);
+    setStatus('');
+    showToast('Transcription error: ' + err.message, 'error');
     isGenerating = false;
     resetUI();
     return;
@@ -985,7 +988,8 @@ async function handleRecordingComplete() {
   } catch (err) {
     clearInterval(liveTimer2);
     hideSteps();
-    setStatus('Image generation error: ' + err.message, true);
+    setStatus('');
+    showToast('Image generation error: ' + err.message, 'error');
     isGenerating = false;
     resetUI();
     return;
@@ -1011,6 +1015,7 @@ async function handleRecordingComplete() {
     'The arcane mirrors reflect your vision.',
   ];
   setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+  showToast('Image generated ($' + genResult.cost_image.toFixed(3) + ')', 'success');
   timingEl.textContent = `Transcribed in ${((t1 - t0) / 1000).toFixed(1)}s · Generated in ${((t2 - t1) / 1000).toFixed(1)}s`;
   isGenerating = false;
   resetUI();
@@ -1113,7 +1118,7 @@ async function handleUpload() {
       displayImage(result.image_url, result.prompt_used, hidden);
     } catch (err) {
       hideSteps();
-      setUploadStatus(`Upload failed (${file.name}): ` + err.message, true);
+      showToast(`Upload failed (${file.name}): ` + err.message, 'error');
       isGenerating = false;
       updateUploadButton();
       return;
@@ -1168,7 +1173,8 @@ async function handleTextSubmit() {
   } catch (err) {
     clearInterval(liveTimerText);
     hideSteps();
-    setStatus('Image generation error: ' + err.message, true);
+    setStatus('');
+    showToast('Image generation error: ' + err.message, 'error');
     isGenerating = false;
     updateTextButton();
     return;
@@ -1194,6 +1200,7 @@ async function handleTextSubmit() {
     'The arcane mirrors reflect your vision.',
   ];
   setStatus(epicLines[Math.floor(Math.random() * epicLines.length)]);
+  showToast('Image generated ($' + genResult.cost_image.toFixed(3) + ')', 'success');
   timingEl.textContent = `Generated in ${((tGen1 - tGen0) / 1000).toFixed(1)}s`;
 
   isGenerating = false;
@@ -1312,7 +1319,7 @@ async function toggleHidden(wrap, url, btn) {
     btn.textContent = nowHidden ? '●' : '◎';
     btn.title = nowHidden ? 'Show to players' : 'Hide from players';
   } catch (e) {
-    setGalleryStatus('Toggle failed: ' + e.message, true);
+    showToast('Toggle failed: ' + e.message, 'error');
   }
 }
 
@@ -1328,7 +1335,7 @@ async function deleteImage(wrap, img, url) {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error);
   } catch (e) {
-    setGalleryStatus('Delete failed: ' + e.message, true);
+    showToast('Delete failed: ' + e.message, 'error');
     return;
   }
 
@@ -1416,7 +1423,7 @@ async function saveOrder() {
   try {
     await fetch('/api.php', { method: 'POST', body: fd });
   } catch (e) {
-    setGalleryStatus('Failed to save order: ' + e.message, true);
+    showToast('Failed to save order: ' + e.message, 'error');
   }
 }
 

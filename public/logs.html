@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Log — DnD Atmosphere</title>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/shared.js"></script>
+<style>
+  body { padding-bottom: 40px; }
+
+  #toolbar {
+    width: min(760px, calc(100vw - 32px));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 16px;
+  }
+
+  #toolbar a {
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #5a5040;
+    text-decoration: none;
+  }
+  #toolbar a:hover { color: #9a8a6a; }
+
+  #btn-refresh {
+    padding: 5px 16px;
+    font-family: inherit;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid #3a3020;
+    background: #111008;
+    color: #7a6a4a;
+    cursor: pointer;
+  }
+  #btn-refresh:hover { border-color: #7a6a4a; color: #c9b99a; }
+
+  #log-list {
+    width: min(760px, calc(100vw - 32px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .entry {
+    border: 1px solid #2a2518;
+    background: #0f0e0a;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+
+  .entry-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .badge {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border: 1px solid;
+  }
+  .badge-transcription { border-color: #5a7a9a; color: #7aaac9; }
+  .badge-generation    { border-color: #7a6a2a; color: #c9a84a; }
+  .badge-error         { border-color: #7a3a3a; color: #c46a6a; }
+
+  .entry-time {
+    font-size: 0.72rem;
+    color: #4a3f2a;
+    letter-spacing: 0.06em;
+  }
+
+  .entry-duration {
+    font-size: 0.72rem;
+    color: #4a3f2a;
+    letter-spacing: 0.04em;
+    margin-left: auto;
+  }
+
+  .entry-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4a3f2a;
+    padding-top: 1px;
+    white-space: nowrap;
+  }
+
+  .entry-value {
+    color: #a09070;
+  }
+
+  .entry-value.heard {
+    color: #c9b99a;
+    font-style: italic;
+  }
+
+  .entry-value.error-text {
+    color: #c46a6a;
+  }
+
+  .entry-value.prompt-final {
+    color: #7a6a4a;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  details > summary {
+    cursor: pointer;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #3a3020;
+    user-select: none;
+    list-style: none;
+  }
+  details > summary:hover { color: #7a6a4a; }
+  details[open] > summary { color: #5a5040; margin-bottom: 6px; }
+
+  .entry-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .meta-item {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: #5a5040;
+  }
+  .meta-item b { color: #9a8a5a; }
+
+  .thumb-link img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border: 1px solid #2a2518;
+    display: block;
+    opacity: 0.75;
+    transition: opacity 0.2s;
+  }
+  .thumb-link img:hover { opacity: 1; }
+
+  #empty {
+    color: #3a3020;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-align: center;
+    padding: 40px 0;
+  }
+</style>
+</head>
+<body>
+
+<h1><a href="/">DnD Atmosphere</a></h1>
+
+<div id="toolbar">
+  <a href="/dm.html">&#8592; Back to DM</a>
+  <button id="btn-refresh">&#8635; Refresh</button>
+</div>
+
+<div id="log-list">
+  <div id="empty">Loading...</div>
+</div>
+
+<script>
+function fmtTime(iso) {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `
+       + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function fmtDuration(s) {
+  if (s == null) return '';
+  return s >= 60
+    ? `${Math.floor(s / 60)}m ${(s % 60).toFixed(1)}s`
+    : `${parseFloat(s).toFixed(1)}s`;
+}
+
+function buildTranscriptionEntry(e) {
+  const div = document.createElement('div');
+  div.className = 'entry';
+
+  const hasError = !!e.error;
+
+  div.innerHTML = `
+    <div class="entry-header">
+      <span class="badge ${hasError ? 'badge-error' : 'badge-transcription'}">Heard</span>
+      <span class="entry-time">${fmtTime(e.ts)}</span>
+      <span class="entry-duration">${fmtDuration(e.duration_s)}</span>
+    </div>
+    ${e.text ? `
+      <span class="entry-label">Text</span>
+      <span class="entry-value heard">"${escHtml(e.text)}"</span>
+    ` : ''}
+    ${hasError ? `
+      <span class="entry-label">Error</span>
+      <span class="entry-value error-text">${escHtml(e.error)}</span>
+    ` : ''}
+    ${!e.text && !hasError ? `
+      <span class="entry-label">Text</span>
+      <span class="entry-value" style="color:#3a3020;font-style:italic">(nothing heard)</span>
+    ` : ''}
+  `;
+  return div;
+}
+
+function buildGenerationEntry(e) {
+  const div = document.createElement('div');
+  div.className = 'entry';
+
+  const hasError = !!e.error;
+  const statusColor = e.http_status === 200 ? '#5aaa5a' : '#c46a6a';
+
+  div.innerHTML = `
+    <div class="entry-header">
+      <span class="badge ${hasError ? 'badge-error' : 'badge-generation'}">Image</span>
+      <span class="entry-time">${fmtTime(e.ts)}</span>
+      <span class="entry-duration">${fmtDuration(e.duration_s)}</span>
+    </div>
+    <span class="entry-label" style="grid-column:1/-1; padding:0;">
+      <span class="entry-meta">
+        <span class="meta-item">Model <b>${escHtml(e.model || '—')}</b></span>
+        <span class="meta-item">Quality <b>${escHtml(e.quality || '—')}</b></span>
+        <span class="meta-item">Size <b>${escHtml(e.size || '—')}</b></span>
+        ${e.attempts > 1 ? `<span class="meta-item">Attempts <b>${e.attempts}</b></span>` : ''}
+        <span class="meta-item">HTTP <b style="color:${statusColor}">${e.http_status || '—'}</b></span>
+        ${e.cost != null ? `<span class="meta-item">Cost <b>$${parseFloat(e.cost).toFixed(3)}</b></span>` : ''}
+      </span>
+    </span>
+    ${e.transcription ? `
+      <span class="entry-label">Heard</span>
+      <span class="entry-value heard">"${escHtml(e.transcription)}"</span>
+    ` : ''}
+    ${e.base_prompt ? `
+      <span class="entry-label">Style</span>
+      <span class="entry-value">${escHtml(truncate(e.base_prompt, 120))}</span>
+    ` : ''}
+    ${e.final_prompt ? `
+      <span class="entry-label">Prompt</span>
+      <span class="entry-value">
+        <details>
+          <summary>Show full prompt</summary>
+          <span class="prompt-final">${escHtml(e.final_prompt)}</span>
+        </details>
+      </span>
+    ` : ''}
+    ${hasError ? `
+      <span class="entry-label">Error</span>
+      <span class="entry-value error-text">${escHtml(e.error)}</span>
+    ` : ''}
+    ${e.image_url ? `
+      <span class="entry-label">Image</span>
+      <span class="entry-value">
+        <a class="thumb-link" href="${escHtml(e.image_url)}" target="_blank">
+          <img src="${escHtml(e.image_url)}" loading="lazy" alt="">
+        </a>
+      </span>
+    ` : ''}
+  `;
+  return div;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function truncate(str, max) {
+  return str.length > max ? str.slice(0, max) + '…' : str;
+}
+
+async function loadLogs() {
+  const list  = document.getElementById('log-list');
+  const empty = document.getElementById('empty');
+  empty.textContent = 'Loading...';
+
+  let data;
+  try {
+    const resp = await fetch('/api.php?action=logs');
+    data = await resp.json();
+    if (!resp.ok) throw new Error(data.error ?? `HTTP ${resp.status}`);
+  } catch (err) {
+    empty.textContent = 'Failed to load logs: ' + err.message;
+    showToast('Failed to load logs: ' + err.message, 'error');
+    return;
+  }
+
+  list.innerHTML = '';
+
+  if (!data.entries || data.entries.length === 0) {
+    const el = document.createElement('div');
+    el.id = 'empty';
+    el.textContent = 'No activity logged yet.';
+    list.appendChild(el);
+    return;
+  }
+
+  for (const entry of data.entries) {
+    if (entry.type === 'transcription') {
+      list.appendChild(buildTranscriptionEntry(entry));
+    } else if (entry.type === 'generation') {
+      list.appendChild(buildGenerationEntry(entry));
+    }
+  }
+}
+
+document.getElementById('btn-refresh').addEventListener('click', loadLogs);
+
+loadLogs();
+</script>
+
+</body>
+</html>
