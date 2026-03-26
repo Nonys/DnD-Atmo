@@ -6,22 +6,37 @@
   <title>DnD Atmosphere</title>
   <link rel="stylesheet" href="/theme.css">
   <style>
-    h1 a { margin-bottom: 16px; }
+    /* Fill the full viewport — no body scroll */
+    body {
+      height: 100vh;
+      height: 100svh;
+      overflow: hidden;
+      padding: 12px 16px;
+      gap: 8px;
+      justify-content: flex-start;
+    }
 
-    #image-frame { width: min(calc(100vw - 32px), 1400px); }
+    h1 a { margin-bottom: 0; }
 
-    /* ---- Prompt display (player overrides) ---- */
-    #prompt-display { width: min(800px, calc(100vw - 32px)); }
-    #prompt-text { max-height: 180px; }
+    /* Image frame fills all remaining vertical space */
+    #image-frame {
+      flex: 1;
+      min-height: 0;
+      width: min(calc(100vw - 32px), 1400px);
+      aspect-ratio: unset; /* override theme.css 1:1 default */
+    }
+
+    /* Show full image without cropping */
+    #current-image, #prev-image { object-fit: contain; }
 
     /* ---- Carousel ---- */
     #carousel {
+      flex-shrink: 0;
       width: min(calc(100vw - 32px), 1400px);
       display: flex;
       gap: 8px;
       overflow-x: auto;
       padding-bottom: 6px;
-      margin-bottom: 16px;
       scroll-snap-type: x mandatory;
       scrollbar-width: thin;
       scrollbar-color: #3a3020 #0d0d0f;
@@ -45,18 +60,26 @@
     .thumb:active { transform: scale(0.92); }
 
     #new-badge {
-      display: none;
       position: fixed;
-      top: 16px;
-      right: 16px;
-      background: #1a1a0a;
-      border: 1px solid #7a6a2a;
-      color: #e8d070;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #c9a84a;
+      font-size: 0.68rem;
+      letter-spacing: 0.28em;
       text-transform: uppercase;
-      padding: 6px 14px;
-      animation: fadein 0.5s ease;
+      pointer-events: none;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    #new-badge.show {
+      animation: badge-appear 4.5s ease forwards;
+    }
+    @keyframes badge-appear {
+      0%   { opacity: 0; }
+      18%  { opacity: 0.55; }
+      65%  { opacity: 0.55; }
+      100% { opacity: 0; }
     }
   </style>
 </head>
@@ -72,25 +95,17 @@
   <img id="current-image" src="" alt="">
 </div>
 
-<div id="prompt-display">
-  <label>Prompt used</label>
-  <div id="prompt-text"></div>
-</div>
-
 <div id="new-badge">✦ New vision</div>
 
 <script>
-const currentImg    = document.getElementById('current-image');
-const prevImg       = document.getElementById('prev-image');
-const placeholder   = document.getElementById('placeholder');
-const carousel      = document.getElementById('carousel');
-const newBadge      = document.getElementById('new-badge');
-const promptDisplay = document.getElementById('prompt-display');
-const promptTxt     = document.getElementById('prompt-text');
-const imageFrame    = document.getElementById('image-frame');
+const currentImg  = document.getElementById('current-image');
+const prevImg     = document.getElementById('prev-image');
+const placeholder = document.getElementById('placeholder');
+const carousel    = document.getElementById('carousel');
+const newBadge    = document.getElementById('new-badge');
+const imageFrame  = document.getElementById('image-frame');
 
-let latestUrl  = null;
-let badgeTimer = null;
+let latestUrl = null;
 
 async function fetchGallery() {
   try {
@@ -102,7 +117,7 @@ async function fetchGallery() {
   }
 }
 
-function showImage(url, prompt = '', slow = false) {
+function showImage(url, slow = false) {
   placeholder.style.display = 'none';
 
   if (currentImg.classList.contains('visible') && currentImg.src !== url) {
@@ -116,41 +131,31 @@ function showImage(url, prompt = '', slow = false) {
   currentImg.classList.remove('visible');
   currentImg.classList.toggle('slow', slow);
   currentImg.src = url;
-  currentImg.onload = () => {
-    imageFrame.style.aspectRatio = `${currentImg.naturalWidth} / ${currentImg.naturalHeight}`;
-    currentImg.classList.add('visible');
-  };
-  if (prompt) {
-    promptTxt.textContent = prompt;
-    promptDisplay.style.display = 'block';
-  } else {
-    promptDisplay.style.display = 'none';
-  }
+  currentImg.onload = () => currentImg.classList.add('visible');
 }
 
 function urlPath(url) {
   return new URL(url, location.href).pathname;
 }
 
-function addThumb(url, prompt = '') {
+function addThumb(url) {
   const img = document.createElement('img');
   img.src = url;
   img.loading = 'lazy';
   img.className = 'thumb';
-  img.dataset.prompt = prompt;
   img.addEventListener('click', () => {
     carousel.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
     img.classList.add('active');
-    showImage(url, prompt);
+    showImage(url);
   });
   carousel.appendChild(img);
   return img;
 }
 
 function flashBadge() {
-  clearTimeout(badgeTimer);
-  newBadge.style.display = 'block';
-  badgeTimer = setTimeout(() => { newBadge.style.display = 'none'; }, 4000);
+  newBadge.classList.remove('show');
+  newBadge.offsetHeight; // force reflow so animation restarts
+  newBadge.classList.add('show');
 }
 
 function thumbMap() {
@@ -164,7 +169,6 @@ function clearMain() {
   currentImg.src = '';
   prevImg.src = '';
   placeholder.style.display = 'flex';
-  promptDisplay.style.display = 'none';
   latestUrl = null;
 }
 
@@ -186,7 +190,7 @@ async function sync(isInit = false) {
   let addedAny = false;
   for (const [path, item] of apiMap) {
     if (!current.has(path)) {
-      addThumb(item.url, item.prompt);
+      addThumb(item.url);
       addedAny = true;
     }
   }
@@ -208,14 +212,14 @@ async function sync(isInit = false) {
       newestThumb.classList.add('active');
       newestThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
     }
-    showImage(newest.url, newest.prompt ?? '', !isInit && addedAny);
+    showImage(newest.url, !isInit && addedAny);
     latestUrl = newest.url;
     if (!isInit && addedAny) flashBadge();
   } else if (removedActive) {
     const firstThumb = carousel.querySelector('.thumb');
     if (firstThumb) {
       firstThumb.classList.add('active');
-      showImage(firstThumb.src, firstThumb.dataset.prompt ?? '');
+      showImage(firstThumb.src);
       latestUrl = firstThumb.src;
     } else {
       clearMain();

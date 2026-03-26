@@ -34,8 +34,8 @@ h1 a:hover { opacity: 1; }
 #image-frame {
   position: relative;
   aspect-ratio: 1;
-  background: #1a1710;
-  border: 1px solid #3a3020;
+  background: #0d0d0f;
+  border: 1px solid #181818;
   margin-bottom: 16px;
   overflow: hidden;
   transition: aspect-ratio 0.4s ease;
