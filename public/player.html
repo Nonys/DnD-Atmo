@@ -232,6 +232,20 @@ currentImg.addEventListener('click', () => {
   if (currentImg.classList.contains('visible')) window.open(currentImg.src, '_blank');
 });
 
+document.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const thumbs = [...carousel.querySelectorAll('.thumb')];
+  if (thumbs.length === 0) return;
+  const activeIdx = thumbs.findIndex(t => t.classList.contains('active'));
+  const delta = e.key === 'ArrowRight' ? 1 : -1;
+  const nextIdx = Math.max(0, Math.min(thumbs.length - 1, activeIdx + delta));
+  if (nextIdx === activeIdx) return;
+  thumbs.forEach(t => t.classList.remove('active'));
+  thumbs[nextIdx].classList.add('active');
+  thumbs[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  showImage(thumbs[nextIdx].src);
+});
+
 setInterval(() => sync(false), 5000);
 </script>
 
